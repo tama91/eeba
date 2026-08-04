@@ -60,20 +60,44 @@ nelle 4 lingue, 20 sessioni di programma, 5 tariffe, 4 extra, relatori e sponsor
 
 ### 3. Deploy
 
-Dal tuo computer basta:
+**Commit e push non mettono niente online.** Salvano il codice su GitHub, nient'altro.
+Il sito cambia solo quando viene eseguito un deploy, che è un'operazione separata.
 
-```bash
-npm run deploy
-```
+Ci sono due modi, e conviene usarne uno solo per volta.
 
-Se invece deploya Cloudflare a ogni push, nelle impostazioni del Worker
-(**Settings → Build**) serve:
+**Automatico, a ogni push** — è il flusso normale. Cloudflare clona il repo ed esegue
+il Deploy command. Nelle impostazioni del Worker (**Settings → Build**):
 
 | Campo | Valore |
 |---|---|
 | Build command | *(vuoto)* |
 | Deploy command | `npx wrangler deploy` |
 | Production branch | `main` |
+
+> Se qui resta `npx wrangler pages deploy` la build fallisce con
+> *"Must specify a directory of assets to deploy"*: è il comando per Pages,
+> e questo progetto è un Worker.
+
+Flusso completo:
+
+```bash
+git add -A
+git commit -m "descrizione"
+git push
+# poi: Cloudflare → Deployments → la build deve essere verde
+```
+
+Se la build è rossa, **il sito resta alla versione precedente** anche se GitHub è aggiornato.
+
+**Manuale, dal terminale** — utile per provare in fretta o quando la build automatica è rotta:
+
+```bash
+npm run deploy
+```
+
+⚠️ Carica i file che hai **sul disco**, non quelli su GitHub. Se hai modifiche non
+committate finiscono online senza essere tracciate. Controlla sempre che
+`git status` sia pulito prima di lanciarlo.
 
 Non impostare `CLOUDFLARE_API_TOKEN` fra le variabili: se c'è, wrangler lo usa
 al posto delle credenziali della build e serve che abbia i permessi

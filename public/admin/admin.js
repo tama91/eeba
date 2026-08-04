@@ -131,6 +131,26 @@ $("#logoutBtn").addEventListener("click", async () => {
   showGate();
 });
 
+/* ------------------------------------------------------------------ tema */
+const THEME_KEY = "eeba27.theme";
+const currentTheme = () => {
+  const forced = document.documentElement.dataset.theme;
+  if (forced === "dark" || forced === "light") return forced;
+  return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+};
+
+$("#themeBtn").addEventListener("click", () => {
+  const next = currentTheme() === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+});
+
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+  if (!saved) delete document.documentElement.dataset.theme;
+});
+
 $("#burger2").addEventListener("click", () => document.body.classList.toggle("nav-open"));
 $$("#sideNav a").forEach(a => a.addEventListener("click", () => document.body.classList.remove("nav-open")));
 
@@ -215,7 +235,7 @@ function lineChart(data, { w = 700, h = 200 } = {}) {
                       <text x="4" y="${y(t) + 3}">${t}</text>`).join("")}
     <path class="area" d="${area}"/>
     <polyline class="line" points="${pts}"/>
-    ${data.map((d, i) => `<circle cx="${x(i)}" cy="${y(d.n)}" r="2.5" fill="#0057D9"><title>${d.d}: ${d.n}</title></circle>`).join("")}
+    ${data.map((d, i) => `<circle class="dot" cx="${x(i)}" cy="${y(d.n)}" r="2.5"><title>${d.d}: ${d.n}</title></circle>`).join("")}
     <text x="${pad.l}" y="${h - 6}">${data[0].d}</text>
     <text x="${w - pad.r}" y="${h - 6}" text-anchor="end">${data[data.length - 1].d}</text>
   </svg>`;

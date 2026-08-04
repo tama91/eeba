@@ -500,6 +500,33 @@ function initScrollSpy() {
   sections.forEach(s => io.observe(s));
 }
 
+/* ------------------------------------------------------------------ TEMA */
+const THEME_KEY = "eeba27.theme";
+
+function currentTheme() {
+  const forced = document.documentElement.dataset.theme;
+  if (forced === "dark" || forced === "light") return forced;
+  return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function initTheme() {
+  const btn = $("#themeBtn");
+  if (!btn) return;
+
+  btn.addEventListener("click", () => {
+    const next = currentTheme() === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+  });
+
+  // Se l'utente non ha mai scelto, si resta agganciati alle impostazioni di sistema.
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    let saved = null;
+    try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+    if (!saved) delete document.documentElement.dataset.theme;
+  });
+}
+
 function initHeader() {
   const h = $("#header");
   const onScroll = () => h.classList.toggle("is-stuck", window.scrollY > 8);
@@ -525,6 +552,7 @@ function initHeader() {
 /* ------------------------------------------------------------------ BOOT */
 async function init() {
   buildLangMenu();
+  initTheme();
   initHeader();
   initTabs();
 
