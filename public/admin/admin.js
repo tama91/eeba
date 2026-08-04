@@ -56,7 +56,11 @@ async function api(path, options = {}) {
     return res;
   }
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || ("Errore " + res.status));
+  if (!res.ok) {
+    // Il dettaglio tecnico serve a capire i 500 senza dover aprire i log.
+    const msg = data.error || ("Errore " + res.status);
+    throw new Error(data.detail ? `${msg} — ${data.detail}` : msg);
+  }
   return data;
 }
 const apiJson = (path, method, body) => api(path, { method, body: JSON.stringify(body || {}) });

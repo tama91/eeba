@@ -154,7 +154,10 @@ Questo vale anche per `public/index.html` aperto direttamente da disco, comodo p
 
 Cosa è già coperto, verificato dai test:
 
-- password con **PBKDF2-SHA256, 210.000 iterazioni**, salt casuale, confronto a tempo costante
+- password con **PBKDF2-SHA256, 100.000 iterazioni**, salt casuale, confronto a tempo costante.
+  100.000 è il tetto imposto dal runtime dei Workers, sotto i 600.000 raccomandati da OWASP:
+  è compensato da password di almeno 10 caratteri e dal freno sui tentativi. Il conteggio è
+  scritto dentro l'hash, quindi alzarlo in futuro non invalida le password esistenti
 - in `sessions` è salvato l'**hash** del token, non il token; cookie `HttpOnly` `Secure` `SameSite=Strict`
 - **i prezzi sono sempre ricalcolati dal server** — quelli inviati dal browser vengono ignorati
 - controllo di **origine** su tutte le scritture (difesa CSRF)

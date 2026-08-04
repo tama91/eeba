@@ -5,7 +5,12 @@
 
 const COOKIE = "eeba_sess";
 const SESSION_HOURS = 12;
-const PBKDF2_ITER = 210000;
+// 100.000 è il massimo che il runtime dei Workers accetta: oltre, deriveBits
+// lancia "Pbkdf2 failed: iteration counts above 100000 are not supported".
+// Il numero di iterazioni è scritto dentro l'hash, quindi se un domani il
+// limite salisse basta alzare questa costante: le password già salvate
+// continuano a verificarsi con il valore con cui erano state create.
+const PBKDF2_ITER = 100000;
 
 /* ------------------------------------------------------------------ utils */
 const json = (data, status = 200, headers = {}) =>
