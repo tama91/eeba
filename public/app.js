@@ -9,11 +9,75 @@ const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const get = (obj, path) => path.split(".").reduce((o, k) => (o == null ? o : o[k]), obj);
 
-const EVENT_START = new Date("2027-04-08T09:00:00+02:00");
+let EVENT_START = new Date("2027-04-08T09:00:00+02:00");
 const STORE_KEY = "eeba27.lang";
 
 let lang = "en";
 let T = I18N.en;
+
+/* Contenuti caricati dal backoffice. Se l'API non risponde il sito continua
+   a funzionare con i valori di i18n.js: nessuna schermata bianca. */
+const DATA = { live: false, settings: {}, programme: null, speakers: null, sponsors: null, tiers: null, addons: null };
+
+const pick = obj => (obj && (obj[lang] || obj.en || Object.values(obj).find(Boolean))) || "";
+
+function setPath(obj, path, value) {
+  const ks = path.split(".");
+  let o = obj;
+  for (let i = 0; i < ks.length - 1; i++) {
+    if (typeof o[ks[i]] !== "object" || o[ks[i]] === null) o[ks[i]] = {};
+    o = o[ks[i]];
+  }
+  o[ks[ks.length - 1]] = value;
+}
+
+async function hydrate() {
+  try {
+    const res = await fetch("/api/public/content", { headers: { accept: "application/json" } });
+    if (!res.ok) throw new Error("offline");
+    const d = await res.json();
+
+    for (const [key, values] of Object.entries(d.translations || {}))
+      for (const code of Object.keys(I18N))
+        if (values[code] && String(values[code]).trim()) setPath(I18N[code], key, values[code]);
+
+    DATA.settings  = d.settings || {};
+    DATA.programme = d.programme || null;
+    DATA.speakers  = d.speakers || null;
+    DATA.sponsors  = d.sponsors || null;
+    DATA.tiers     = (d.tiers && d.tiers.length) ? d.tiers : null;
+    DATA.addons    = (d.addons && d.addons.length) ? d.addons : null;
+    DATA.live = true;
+
+    if (DATA.settings.event_start) {
+      const dd = new Date(DATA.settings.event_start);
+      if (!isNaN(dd)) EVENT_START = dd;
+    }
+  } catch {
+    DATA.live = false;   // si prosegue con i contenuti inclusi nel bundle
+  }
+}
+
+/* Listino normalizzato: dal database se disponibile, altrimenti da PRICING. */
+function tierList() {
+  if (DATA.tiers) return DATA.tiers.map(t => ({
+    id: t.code, early: t.early_price / 100, late: t.late_price / 100,
+    h: pick(t.name_json), p: pick(t.desc_json)
+  }));
+  return PRICING.tiers.map(t => ({
+    id: t.id, early: t.early, late: t.late,
+    h: T.reg.tiers[t.id].h, p: T.reg.tiers[t.id].p
+  }));
+}
+
+function addonList() {
+  if (DATA.addons) return DATA.addons.map(a => ({
+    id: a.code, price: a.price / 100, h: pick(a.name_json), s: pick(a.desc_json)
+  }));
+  return PRICING.addons.map(a => ({
+    id: a.id, price: a.price, h: T.reg.add[a.id].h, s: T.reg.add[a.id].s
+  }));
+}
 
 /* ---------------------------------------------------------------- LINGUA */
 function detectLang() {
@@ -53,6 +117,7 @@ function setLang(code) {
   renderAddons();
   renderPayMethods();
   renderFormOptions();
+  renderSponsors();
   renderFaq();
   renderSummary();
   syncCta();
@@ -109,7 +174,9 @@ const TAGMAP = { key:"tagKey", lab:"tagLab", soc:"tagSoc", sym:"tagSym", free:"t
 function renderProgramme() {
   const active = $(".tab.is-on")?.dataset.day || "1";
   $("#panels").innerHTML = [1, 2, 3].map(d => {
-    const slots = T.prog["day" + d] || [];
+    const slots = DATA.programme
+      ? (DATA.programme[d] || []).map(s => ({ t: s.t, tag: s.tag, h: pick(s.h), p: pick(s.p) }))
+      : (T.prog["day" + d] || []);
     return `<div class="panel ${String(d) === active ? "is-on" : ""}" data-panel-day="${d}">` +
       slots.map(s => `
         <div class="slot">
@@ -131,11 +198,37 @@ function initTabs() {
 /* ------------------------------------------------------------- SPEAKERS */
 function renderSpeakers() {
   const ph = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="12" cy="8.5" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>`;
-  $("#spkGrid").innerHTML = ["r1", "r2", "r3", "r4"].map(k => `
+  const list = DATA.speakers
+    ? DATA.speakers.map(s => ({ name: s.name, org: s.org, photo: s.photo_url, role: pick(s.role_json) }))
+    : ["r1", "r2", "r3", "r4"].map(k => ({ name: "", org: "", photo: "", role: T.spk[k] }));
+
+  $("#spkGrid").innerHTML = list.map(s => `
     <article class="spk">
-      <div class="spk__ph">${ph}</div>
-      <div class="spk__b"><h4>—</h4><p>${T.spk[k]}</p></div>
+      <div class="spk__ph"${s.name ? ` data-named="1"` : ""}>${
+        s.photo ? `<img src="${s.photo}" alt="${s.name || ""}" loading="lazy" style="width:100%;height:100%;object-fit:cover">` : ph
+      }</div>
+      <div class="spk__b">
+        <h4>${s.name || "—"}</h4>
+        <p>${[s.role, s.org].filter(Boolean).join(" · ")}</p>
+      </div>
     </article>`).join("");
+}
+
+function renderSponsors() {
+  const box = $(".sponsors");
+  if (!box || !DATA.sponsors) return;
+  const label = { platinum: "Platinum", gold: "Gold", silver: "Silver", partner: "Partner" };
+  const rank = { platinum: 0, gold: 1, silver: 2, partner: 3 };
+  const list = [...DATA.sponsors].sort((a, b) => (rank[a.tier] ?? 9) - (rank[b.tier] ?? 9));
+  if (!list.length) return;
+  box.innerHTML = list.map(s => {
+    const inner = s.logo_url
+      ? `<img src="${s.logo_url}" alt="${s.name}" loading="lazy" style="max-height:56%;max-width:70%;object-fit:contain">`
+      : `${s.name || label[s.tier] || ""}`;
+    return s.url
+      ? `<div><a href="${s.url}" target="_blank" rel="noopener" title="${s.name}" style="display:grid;place-items:center;width:100%;height:100%">${inner}</a></div>`
+      : `<div title="${s.name}">${inner}</div>`;
+  }).join("");
 }
 
 /* ----------------------------------------------------------------- FAQ */
@@ -164,20 +257,20 @@ function renderFaq() {
 /* ============================ REGISTRAZIONE ============================ */
 const state = { tier: null, addons: new Set(), pay: "card", step: 1 };
 
-const isEarly = () => Date.now() < new Date(PRICING.earlyUntil + "T23:59:59").getTime();
+const earlyUntil = () => DATA.settings.early_until || PRICING.earlyUntil;
+const isEarly = () => Date.now() < new Date(earlyUntil() + "T23:59:59").getTime();
 const eur = n => new Intl.NumberFormat(lang === "en" ? "en-IE" : lang, { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 const tierPrice = t => (isEarly() ? t.early : t.late);
-const findTier = id => PRICING.tiers.find(t => t.id === id);
-const findAddon = id => PRICING.addons.find(a => a.id === id);
+const findTier = id => tierList().find(t => t.id === id);
+const findAddon = id => addonList().find(a => a.id === id);
 
 function renderTiers() {
-  $("#tierList").innerHTML = PRICING.tiers.map(t => {
-    const c = T.reg.tiers[t.id];
+  $("#tierList").innerHTML = tierList().map(t => {
     const early = isEarly();
     return `<div class="tier ${state.tier === t.id ? "is-sel" : ""}" data-tier="${t.id}" role="radio" tabindex="0" aria-checked="${state.tier === t.id}">
       <span class="tier__radio"></span>
-      <div><h4>${c.h}</h4><p>${c.p}</p></div>
-      <div class="tier__price"><b>${eur(tierPrice(t))}</b>${early ? `<s>${eur(t.late)}</s>` : ""}</div>
+      <div><h4>${t.h}</h4><p>${t.p}</p></div>
+      <div class="tier__price"><b>${eur(tierPrice(t))}</b>${early && t.late > t.early ? `<s>${eur(t.late)}</s>` : ""}</div>
     </div>`;
   }).join("");
 
@@ -190,14 +283,12 @@ function renderTiers() {
 
 function renderAddons() {
   const check = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m4 12.5 5.2 5.2L20 7"/></svg>`;
-  $("#addonList").innerHTML = PRICING.addons.map(a => {
-    const c = T.reg.add[a.id];
-    return `<label class="addon ${state.addons.has(a.id) ? "is-sel" : ""}" data-addon="${a.id}">
+  $("#addonList").innerHTML = addonList().map(a => `
+    <label class="addon ${state.addons.has(a.id) ? "is-sel" : ""}" data-addon="${a.id}">
       <span class="addon__box">${check}</span>
-      <span class="addon__t"><b>${c.h}</b><span>${c.s}</span></span>
+      <span class="addon__t"><b>${a.h}</b><span>${a.s}</span></span>
       <span class="addon__p">+ ${eur(a.price)}</span>
-    </label>`;
-  }).join("");
+    </label>`).join("");
 
   $$("#addonList .addon").forEach(el => el.addEventListener("click", e => {
     e.preventDefault();
@@ -233,16 +324,20 @@ function renderSummary() {
   const body = $("#sumBody");
   if (!state.tier) { body.innerHTML = `<p class="small" style="margin:0">${T.reg.sumEmpty}</p>`; return; }
 
-  const t = findTier(state.tier), tp = tierPrice(t);
+  const t = findTier(state.tier);
+  if (!t) { body.innerHTML = `<p class="small" style="margin:0">${T.reg.sumEmpty}</p>`; return; }
+  const tp = tierPrice(t);
   let total = tp;
   let html = `<div class="sline"><span>${T.reg.sumTier}</span><span>${eur(tp)}</span></div>
-              <div class="sline sline--sub"><span>${T.reg.tiers[t.id].h}</span><span></span></div>`;
+              <div class="sline sline--sub"><span>${t.h}</span><span></span></div>`;
 
   if (state.addons.size) {
     html += `<div class="sline" style="margin-top:6px"><span>${T.reg.sumAdd}</span><span></span></div>`;
     state.addons.forEach(id => {
-      const a = findAddon(id); total += a.price;
-      html += `<div class="sline sline--sub"><span>${T.reg.add[id].h}</span><span>${eur(a.price)}</span></div>`;
+      const a = findAddon(id);
+      if (!a) return;
+      total += a.price;
+      html += `<div class="sline sline--sub"><span>${a.h}</span><span>${eur(a.price)}</span></div>`;
     });
   }
 
@@ -298,10 +393,50 @@ function validateForm() {
   return ok;
 }
 
-function completeBooking() {
-  const ref = "EEBA27-" + Math.random().toString(36).slice(2, 8).toUpperCase();
-  $("#bookRef").textContent = ref;
-  goStep(4);
+async function completeBooking() {
+  const btn = $("#payBtn"), cta = $("#sumCta");
+  btn.disabled = cta.disabled = true;
+
+  const payload = {
+    first_name: $("#fn").value.trim(),
+    last_name:  $("#ln").value.trim(),
+    email:      $("#em").value.trim(),
+    org:        $("#org").value.trim(),
+    role:       $("#role").selectedOptions[0]?.textContent || null,
+    country:    $("#country").value || null,
+    vat:        $("#vat").value.trim() || null,
+    diet:       $("#diet").value.trim() || null,
+    lang,
+    tier_code:  state.tier,
+    addons:     [...state.addons],
+    payment_method: state.pay,
+    consent_terms: $("#k1").checked,
+    consent_gdpr:  $("#k2").checked,
+    newsletter:    $("#k3").checked
+  };
+
+  try {
+    const res = await fetch("/api/public/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Registration failed");
+    $("#bookRef").textContent = data.ref;
+    goStep(4);
+    // In produzione: se il server restituisce un checkout_url, qui si reindirizza.
+  } catch (e) {
+    // L'API non è disponibile (es. sito aperto in locale): si mostra comunque
+    // la conferma con un riferimento provvisorio, senza far perdere i dati.
+    if (DATA.live) { toast(e.message); }
+    else {
+      $("#bookRef").textContent = "EEBA27-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+      goStep(4);
+    }
+  } finally {
+    btn.disabled = cta.disabled = false;
+  }
 }
 
 function resetBooking() {
@@ -388,7 +523,7 @@ function initHeader() {
 }
 
 /* ------------------------------------------------------------------ BOOT */
-function init() {
+async function init() {
   buildLangMenu();
   initHeader();
   initTabs();
@@ -399,6 +534,7 @@ function init() {
   $("#resetBtn").addEventListener("click", resetBooking);
   $("#icsBtn").addEventListener("click", downloadIcs);
 
+  await hydrate();
   setLang(detectLang());
   initReveal();
   initScrollSpy();

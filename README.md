@@ -1,90 +1,161 @@
 # EEBA 2027 — Leuven
 
-Sito vetrina + iscrizioni per il XXXVIII Congresso Annuale della European Eye Bank Association
+Sito, iscrizioni e backoffice per il XXXVIII Congresso Annuale della European Eye Bank Association
 (University Hall, Leuven, 8–10 aprile 2027).
 
-Prototipo statico: nessuna build, nessuna dipendenza. Apri `index.html` in un browser.
+Stack: **Cloudflare Pages + Pages Functions + D1**. Nessun framework, nessuna build.
 
-## File
+---
 
-| File | Cosa contiene |
-|---|---|
-| `index.html` | Struttura di tutte le sezioni. Il testo non è scritto qui: ogni elemento traducibile ha `data-i18n="chiave.percorso"`. |
-| `styles.css` | Design system completo (variabili colore/tipografia in `:root`), componenti, responsive, print, `prefers-reduced-motion`. |
-| `i18n.js` | **Tutti i contenuti**, in 4 lingue. In fondo: listino prezzi (`PRICING`) e lista paesi (`COUNTRIES`). |
-| `app.js` | Logica: switch lingua, countdown, tab programma, accordion FAQ, flusso iscrizione a 4 step, export `.ics`. |
+## Struttura
 
-## Modificare i contenuti
-
-Tutto il testo sta in `i18n.js`. Le **chiavi** (a sinistra dei due punti) non vanno mai tradotte;
-si traducono solo i valori tra virgolette.
-
-```js
-hero: {
-  t1:"Eye banking,",     // ← traduci questo
-  t2:"from theory",
-}
+```
+public/              → sito statico (è la "build output directory" su Pages)
+  index.html           sito pubblico, 4 lingue
+  styles.css
+  app.js               logica del sito + flusso iscrizione
+  i18n.js              contenuti di fallback + listino di riserva
+  _headers             intestazioni di sicurezza
+  admin/               backoffice (SPA)
+functions/api/[[path]].js   tutta l'API, router unico
+schema/
+  schema.sql           tabelle D1
+  seed.sql             dati iniziali (generato)
+  generate-seed.js     rigenera seed.sql da public/i18n.js
+tests/api.test.mjs     75 test d'integrazione sull'API reale
+wrangler.toml
 ```
 
-`data-i18n-html` accetta HTML nel valore (usato per l'indirizzo della segreteria).
+---
+
+## Setup
+
+### 1. Crea il database
+
+```bash
+npm install
+npx wrangler d1 create eeba-2027
+```
+
+Copia il `database_id` che ottieni dentro `wrangler.toml`.
+
+### 2. Carica schema e contenuti iniziali
+
+```bash
+npm run db:schema
+npm run db:seed
+```
+
+Il seed importa nel database tutto ciò che oggi sta in `i18n.js`: 227 chiavi di traduzione
+nelle 4 lingue, 20 sessioni di programma, 5 tariffe, 4 extra, relatori e sponsor segnaposto.
+
+### 3. Configura Cloudflare Pages
+
+Nelle impostazioni del progetto:
+
+| Campo | Valore |
+|---|---|
+| Framework preset | None |
+| Build command | *(vuoto)* |
+| **Build output directory** | **`public`** ← era `/`, va cambiato |
+| Production branch | `main` |
+
+Poi **Settings → Functions → D1 database bindings**: aggiungi il binding
+`DB` → `eeba-2027`, sia per Production che per Preview.
+
+### 4. Primo accesso
+
+Vai su `https://iltuosito/admin`. La prima volta compare la schermata di setup:
+crea l'account amministratore. È possibile una sola volta — appena esiste un utente,
+l'endpoint di setup si chiude da solo.
+
+### Sviluppo in locale
+
+```bash
+npm run db:schema:local
+npm run db:seed:local
+npm run dev          # → http://localhost:8788
+npm test             # 75 test, nessuna dipendenza esterna
+```
+
+---
+
+## Backoffice
+
+Su `/admin`.
+
+**Dashboard** — iscritti, valore totale, incassato e da incassare; andamento a 30 giorni;
+ripartizione per stato, tariffa e paese; riempimento degli extra a capienza limitata; ultime iscrizioni.
+
+**Iscrizioni** — ricerca su nome/email/ente/riferimento, filtri per stato e tariffa, paginazione,
+scheda di dettaglio con cambio stato pagamento e note interne, export CSV (separatore `;`, BOM per Excel).
+
+**Programma / Relatori / Sponsor / Traduzioni** — CRUD completo con editor a schede per le 4 lingue.
+Le schede segnano con un pallino rosso le lingue ancora vuote. Ogni salvataggio è online entro un minuto
+(la risposta pubblica è in cache 60 secondi).
+
+**Tariffe ed extra** — prezzi early bird e pieni, capienza, attivazione/sospensione.
+I prezzi si inseriscono in euro e vengono salvati in centesimi.
+
+**Impostazioni** — date evento, scadenza early bird, lingue attive, apertura iscrizioni, sede.
+
+**Utenti** — tre ruoli:
+
+| Ruolo | Può fare |
+|---|---|
+| `viewer` | solo lettura |
+| `editor` | + modificare contenuti e iscrizioni |
+| `admin` | + gestire utenti ed eliminare |
+
+**Registro attività** — ultime 200 operazioni con autore, azione e oggetto. Traccia anche i login falliti.
+
+---
+
+## Come sono legati sito e database
+
+All'avvio il sito chiama `GET /api/public/content` e sovrascrive i valori di `i18n.js`
+con quelli del database. **Se l'API non risponde, il sito continua a funzionare** con i
+contenuti inclusi nel bundle: nessuna pagina bianca, nessun blocco.
+
+Questo vale anche per `public/index.html` aperto direttamente da disco, comodo per lavorare sulla grafica.
 
 ### Aggiungere una lingua
 
-1. In `i18n.js`, duplica un blocco lingua completo (es. `en: { … }`) e rinominalo (`de: { … }`).
-2. Traduci i valori.
-3. Aggiungi la voce in `LANGS`: `{ code:"de", label:"Deutsch", short:"DE" }`.
+1. `i18n.js`: duplica un blocco lingua, traduci, aggiungi la voce in `LANGS`.
+2. Backoffice → Impostazioni → `languages`: aggiungi il codice (es. `en,it,nl,fr,de`).
+3. Le schede lingua nel backoffice compaiono da sole, con tutti i campi da riempire.
 
-Il selettore lingua e il rilevamento automatico si aggiornano da soli.
-La lingua è rilevata in quest'ordine: `?lang=xx` nell'URL → scelta salvata in `localStorage` → lingua del browser → inglese.
+---
 
-### Modificare i prezzi
+## Sicurezza
 
-In fondo a `i18n.js`:
+Cosa è già coperto, verificato dai test:
 
-```js
-const PRICING = {
-  earlyUntil: "2027-01-15",         // dopo questa data scatta il prezzo "late"
-  tiers:  [{ id:"mem", early:520, late:620 }, …],
-  addons: [{ id:"lab", price:150 }, …]
-};
-```
+- password con **PBKDF2-SHA256, 210.000 iterazioni**, salt casuale, confronto a tempo costante
+- in `sessions` è salvato l'**hash** del token, non il token; cookie `HttpOnly` `Secure` `SameSite=Strict`
+- **i prezzi sono sempre ricalcolati dal server** — quelli inviati dal browser vengono ignorati
+- controllo di **origine** su tutte le scritture (difesa CSRF)
+- **freno ai tentativi di login**: 8 fallimenti in 15 minuti per email, poi 429
+- query esclusivamente **parametrizzate**; i nomi di colonna passano da una allowlist
+- un amministratore non può declassare né eliminare se stesso (niente lock-out)
+- cambio password: chiude tutte le altre sessioni
 
-Gli `id` collegano il prezzo al testo in `reg.tiers.<id>` e `reg.add.<id>` di ogni lingua.
-Aggiungendo una tariffa, aggiungi il testo corrispondente in **tutte** le lingue.
+Cosa manca prima del traffico reale:
 
-## Flusso di iscrizione
+- [ ] **Pagamenti**: `POST /api/public/register` crea l'iscrizione in stato `pending`.
+      Va collegato a Stripe/Mollie creando lì la Checkout Session e restituendo l'URL,
+      con webhook che porta lo stato a `paid`. Il punto di aggancio è commentato nel codice.
+- [ ] **Email transazionali**: conferma, fattura, QR del badge (Resend, Postmark o MailChannels).
+- [ ] **Recupero password** via email (oggi la reimposta un amministratore).
+- [ ] **Backup del D1** programmati (`wrangler d1 export`).
+- [ ] Pagine Privacy / Condizioni / Cookie e banner di consenso.
+- [ ] Verifica partita IVA su VIES per la fatturazione istituzionale.
 
-4 step: **Biglietto → Dati → Pagamento → Conferma**, con riepilogo sticky che ricalcola il totale in tempo reale.
-Validazione lato client su campi obbligatori, formato email, corrispondenza delle due email e consensi GDPR.
-
-⚠️ **Il pagamento è simulato.** Nessun dato lascia il browser e nessuna transazione viene eseguita.
-Per andare in produzione servono tre agganci:
-
-1. **Backend** — `completeBooking()` in `app.js` deve fare POST di `state` + dati del form a un endpoint server.
-2. **Pagamento** — il server crea una Checkout Session (Stripe/Mollie/Adyen) e restituisce l'URL di redirect.
-   I prezzi vanno ricalcolati **lato server**: `PRICING` è pubblico e modificabile dal browser.
-3. **Conferma** — webhook del provider → invio email con fattura e QR del badge, scrittura su database.
-
-Da valutare anche: capienza reale dei wetlab (24 posti), verifica dello status di socio EEBA,
-validazione partita IVA (VIES) e conservazione dei dati a norma GDPR.
+---
 
 ## Note sui contenuti
 
-Testi introduttivi, tema, sede, date e recapiti della segreteria derivano dalla pagina ufficiale EEBA.
-Sono invece **indicativi e da confermare** con il Comitato Organizzatore:
-
-- il dettaglio orario delle sessioni nel programma
-- le tariffe e le date di early bird / cancellazione
-- le scadenze per gli abstract
-- le risposte delle FAQ
-- i relatori (segnaposto "TBA" in attesa delle conferme)
-
-## Da fare prima del lancio
-
-- [ ] Sostituire i contenuti indicativi con quelli approvati
-- [ ] Foto della sede e ritratti dei relatori al posto dei segnaposto SVG
-- [ ] Logo EEBA ufficiale al posto del simbolo generato
-- [ ] Backend pagamenti + email transazionali
-- [ ] Pagine Privacy / Condizioni / Cookie e banner di consenso
-- [ ] Meta OG e Twitter card con immagine di anteprima
-- [ ] Analytics e URL definitivo nei link canonici
+Invito, tema, sede, date e recapiti della segreteria derivano dalla pagina ufficiale EEBA.
+Sono invece **indicativi e da confermare** con il Comitato Organizzatore: il dettaglio orario
+delle sessioni, le tariffe, le scadenze di early bird e cancellazione, le risposte delle FAQ.
+I relatori sono segnaposto "TBA" in attesa delle conferme.

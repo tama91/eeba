@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Backoffice — EEBA 2027</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="admin.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='none' stroke='%230057D9' stroke-width='2'/><circle cx='16' cy='16' r='5' fill='%230057D9'/></svg>">
+</head>
+<body>
+
+<!-- ======================= ACCESSO ======================= -->
+<div class="gate" id="gate">
+  <div class="gate__box">
+    <svg class="gate__mark" viewBox="0 0 32 32">
+      <circle cx="16" cy="16" r="14.5" fill="none" stroke="#0B0E13" stroke-width="1.2" opacity=".22"/>
+      <circle cx="16" cy="16" r="10" fill="none" stroke="#0057D9" stroke-width="1.4"/>
+      <circle cx="16" cy="16" r="4.6" fill="#0057D9"/>
+    </svg>
+
+    <!-- login -->
+    <form id="loginForm">
+      <h1>Backoffice EEBA 2027</h1>
+      <p class="sub">Accedi per gestire iscrizioni e contenuti.</p>
+      <div class="alert alert--err hidden" id="loginErr"></div>
+      <div class="f"><label for="lEmail">Email</label><input id="lEmail" type="email" autocomplete="username" required></div>
+      <div class="f"><label for="lPass">Password</label><input id="lPass" type="password" autocomplete="current-password" required></div>
+      <button class="btn btn--primary btn--block" type="submit">Accedi</button>
+    </form>
+
+    <!-- setup iniziale -->
+    <form id="setupForm" class="hidden">
+      <h1>Primo accesso</h1>
+      <p class="sub">Non esiste ancora nessun amministratore. Crea il primo account: sarà l'unico a poter gestire gli utenti.</p>
+      <div class="alert alert--err hidden" id="setupErr"></div>
+      <div class="f"><label for="sName">Nome</label><input id="sName" autocomplete="name" required></div>
+      <div class="f"><label for="sEmail">Email</label><input id="sEmail" type="email" autocomplete="username" required></div>
+      <div class="f"><label for="sPass">Password</label><input id="sPass" type="password" autocomplete="new-password" required>
+        <p class="hint">Almeno 10 caratteri.</p></div>
+      <button class="btn btn--primary btn--block" type="submit">Crea amministratore</button>
+    </form>
+  </div>
+</div>
+
+<!-- ======================= APPLICAZIONE ======================= -->
+<div class="shell hidden" id="shell">
+
+  <aside class="side" id="side">
+    <div class="side__brand">
+      <svg viewBox="0 0 32 32">
+        <circle cx="16" cy="16" r="14.5" fill="none" stroke="#0B0E13" stroke-width="1.2" opacity=".22"/>
+        <circle cx="16" cy="16" r="10" fill="none" stroke="#0057D9" stroke-width="1.4"/>
+        <circle cx="16" cy="16" r="4.6" fill="#0057D9"/>
+      </svg>
+      <div><b>EEBA 2027</b><span>Backoffice</span></div>
+    </div>
+
+    <nav class="side__nav" id="sideNav">
+      <div class="side__group">Attività</div>
+      <a href="#/dashboard"     data-view="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Dashboard</a>
+      <a href="#/registrations" data-view="registrations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v14H4z"/><path d="M4 9h16M9 9v10"/></svg>Iscrizioni<span class="badge" id="navRegCount">—</span></a>
+
+      <div class="side__group">Contenuti</div>
+      <a href="#/programme"   data-view="programme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Programma</a>
+      <a href="#/speakers"    data-view="speakers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>Relatori</a>
+      <a href="#/sponsors"    data-view="sponsors"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3 2.6 5.6 6.4.8-4.7 4.3 1.3 6.3L12 17l-5.6 3 1.3-6.3L3 9.4l6.4-.8Z"/></svg>Sponsor</a>
+      <a href="#/translations" data-view="translations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h10M9 3v2c0 5-2.5 8-5 9M7 10c1 3 3.5 5 6 6M13 21l4.5-11L22 21M15 17h5"/></svg>Traduzioni</a>
+
+      <div class="side__group">Configurazione</div>
+      <a href="#/pricing"  data-view="pricing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h18v12H3z"/><circle cx="12" cy="13" r="2.5"/><path d="M3 11h2M19 11h2"/></svg>Tariffe ed extra</a>
+      <a href="#/settings" data-view="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg>Impostazioni</a>
+      <a href="#/users" data-view="users" id="navUsers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 5.2a3 3 0 0 1 0 5.6M18.5 20a6.4 6.4 0 0 0-3-5.4"/></svg>Utenti</a>
+      <a href="#/audit" data-view="audit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>Registro attività</a>
+    </nav>
+
+    <div class="side__foot">
+      <div class="side__me">
+        <span class="av" id="meAv">—</span>
+        <div style="min-width:0"><b id="meName">—</b><span id="meRole">—</span></div>
+        <button class="btn btn--subtle btn--sm" id="logoutBtn" style="margin-left:auto" title="Esci">Esci</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <button class="burger2" id="burger2" aria-label="Menu">☰</button>
+      <div><h1 id="viewTitle">Dashboard</h1><div class="sub" id="viewSub"></div></div>
+      <div class="top__act" id="viewAct"></div>
+    </header>
+    <div class="view" id="view"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<!-- ======================= MODALE ======================= -->
+<div class="modal" id="modal">
+  <div class="modal__box" id="modalBox">
+    <div class="modal__h"><h3 id="modalTitle">—</h3><button type="button" id="modalX" aria-label="Chiudi">×</button></div>
+    <div class="modal__b" id="modalBody"></div>
+    <div class="modal__f" id="modalFoot"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="admin.js"></script>
+</body>
+</html>
