@@ -10,4 +10,4 @@ pages_build_output_dir = "public"
 [[d1_databases]]
 binding = "DB"
 database_name = "eeba-2027"
-database_id = "METTI-QUI-L-ID-DEL-DATABASE"
+database_id = "4111ef08-0360-4af4-9953-cedb4dd05e89"
