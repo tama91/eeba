@@ -336,6 +336,11 @@ body.menu-open .burger span::after{ top:0; transform:rotate(-45deg); }
 .step.is-done{ color:var(--ok); border-color:#BFE3D6; }
 .step.is-done i{ background:var(--ok); color:#fff; }
 
+/* I quattro passaggi dell'iscrizione: uno solo visibile per volta.
+   Li mostra e nasconde goStep() in app.js aggiungendo .is-on. */
+.regstep{ display:none; }
+.regstep.is-on{ display:block; animation:fadeUp .45s var(--ease); }
+
 .tier{
   display:grid; grid-template-columns:auto 1fr auto; gap:18px; align-items:center;
   border:1px solid var(--line); border-radius:var(--radius-lg); padding:20px 22px; margin-bottom:12px;
