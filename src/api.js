@@ -199,6 +199,33 @@ export async function onRequest(context) {
         return json({ needsSetup: (n?.c ?? 0) === 0 });
       }
 
+      /* Diagnostica: dice quale pezzo non funziona senza dover leggere i log.
+         Si disattiva da sola appena esiste un utente, come il setup. */
+      if (seg[1] === "diag" && method === "GET") {
+        const out = { runtime: typeof navigator !== "undefined" ? navigator.userAgent : "unknown" };
+        try {
+          const n = await env.DB.prepare(`SELECT COUNT(*) AS c FROM users`).first();
+          out.db = "ok"; out.users = n?.c ?? 0;
+          if (out.users > 0) return err(403, "Diagnostica disponibile solo prima del setup iniziale");
+        } catch (e) { out.db = "ERRORE: " + String(e?.message || e); return json(out); }
+
+        try {
+          const t0 = Date.now();
+          const h = await hashPassword("prova-di-derivazione");
+          out.pbkdf2 = "ok"; out.pbkdf2_ms = Date.now() - t0; out.pbkdf2_iter = PBKDF2_ITER;
+          out.verify = await verifyPassword("prova-di-derivazione", h) ? "ok" : "ERRORE: mismatch";
+        } catch (e) { out.pbkdf2 = "ERRORE: " + String(e?.message || e); return json(out); }
+
+        try {
+          await env.DB.prepare(
+            `INSERT INTO audit_log (action, entity, detail) VALUES ('diag','users','test scrittura')`).run();
+          await env.DB.prepare(`DELETE FROM audit_log WHERE action = 'diag'`).run();
+          out.write = "ok";
+        } catch (e) { out.write = "ERRORE: " + String(e?.message || e); }
+
+        return json(out);
+      }
+
       // creazione del primo amministratore — possibile solo a tabella vuota
       if (seg[1] === "setup" && method === "POST") {
         const n = await env.DB.prepare(`SELECT COUNT(*) AS c FROM users`).first();
@@ -206,10 +233,17 @@ export async function onRequest(context) {
         const { email, name, password } = body;
         if (!email || !password) return err(400, "Email e password obbligatorie");
         if (String(password).length < 10) return err(400, "La password deve avere almeno 10 caratteri");
-        const hash = await hashPassword(String(password));
-        await env.DB.prepare(
-          `INSERT INTO users (email, name, password_hash, role) VALUES (?1,?2,?3,'admin')`)
-          .bind(String(email).toLowerCase().trim(), name || "Admin", hash).run();
+
+        let hash;
+        try { hash = await hashPassword(String(password)); }
+        catch (e) { return err(500, "Hashing della password non riuscito", { detail: String(e?.message || e) }); }
+
+        try {
+          await env.DB.prepare(
+            `INSERT INTO users (email, name, password_hash, role) VALUES (?1,?2,?3,'admin')`)
+            .bind(String(email).toLowerCase().trim(), name || "Admin", hash).run();
+        } catch (e) { return err(500, "Creazione dell'utente non riuscita", { detail: String(e?.message || e) }); }
+
         await audit(env, null, "setup", "users", null, email);
         return json({ ok: true });
       }
