@@ -1,12 +1,19 @@
+# Worker con asset statici (non un progetto Pages).
+# Deploy:  npx wrangler deploy
+
 name = "eeba"
+main = "src/index.js"
 compatibility_date = "2026-08-04"
 
-# Il sito statico sta in public/. La cartella functions/ resta alla radice:
-# Cloudflare Pages la riconosce da sé e non la pubblica come file statici.
-pages_build_output_dir = "public"
+# Il sito statico. run_worker_first garantisce che /api/* arrivi sempre al
+# Worker e non venga intercettato dal router degli asset.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "404-page"
+run_worker_first = ["/api/*"]
 
-# Database D1. Sostituisci database_id con quello che ti restituisce
-#   npx wrangler d1 create eeba-2027
+# Database D1
 [[d1_databases]]
 binding = "DB"
 database_name = "eeba-2027"

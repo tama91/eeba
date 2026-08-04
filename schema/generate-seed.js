@@ -26,7 +26,7 @@ const W = s => out.push(s);
 W("-- ==========================================================================");
 W("-- EEBA 2027 — seed generato automaticamente da i18n.js");
 W("-- NON modificare a mano: rigenera con  node schema/generate-seed.js");
-W("-- Applicare con:  npx wrangler d1 execute eeba --file=schema/seed.sql --remote");
+W("-- Applicare con:  npm run db:seed   (npx wrangler d1 execute eeba-2027 --file=schema/seed.sql --remote)");
 W("-- ==========================================================================\n");
 
 /* ------------------------------------------------------------- IMPOSTAZIONI */

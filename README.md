@@ -3,21 +3,24 @@
 Sito, iscrizioni e backoffice per il XXXVIII Congresso Annuale della European Eye Bank Association
 (University Hall, Leuven, 8–10 aprile 2027).
 
-Stack: **Cloudflare Pages + Pages Functions + D1**. Nessun framework, nessuna build.
+Stack: **Cloudflare Worker con asset statici + D1**. Nessun framework, nessuna build.
 
 ---
 
 ## Struttura
 
 ```
-public/              → sito statico (è la "build output directory" su Pages)
+public/              → sito statico, servito dal binding ASSETS
   index.html           sito pubblico, 4 lingue
   styles.css
   app.js               logica del sito + flusso iscrizione
   i18n.js              contenuti di fallback + listino di riserva
+  404.html
   _headers             intestazioni di sicurezza
   admin/               backoffice (SPA)
-functions/api/[[path]].js   tutta l'API, router unico
+src/
+  index.js             entry del Worker: /api/* → api.js, il resto → ASSETS
+  api.js               tutta l'API, router unico
 schema/
   schema.sql           tabelle D1
   seed.sql             dati iniziali (generato)
@@ -25,6 +28,12 @@ schema/
 tests/api.test.mjs     75 test d'integrazione sull'API reale
 wrangler.toml
 ```
+
+> **Nota storica.** Il progetto era nato come Cloudflare Pages. È un Worker con
+> asset statici perché è così che il progetto esiste sull'account, ed è la
+> direzione verso cui Cloudflare sta spostando tutto. La differenza pratica:
+> si deploya con `wrangler deploy` e non `wrangler pages deploy`, e i binding
+> stanno in `wrangler.toml` invece che nel pannello.
 
 ---
 
@@ -49,19 +58,30 @@ npm run db:seed
 Il seed importa nel database tutto ciò che oggi sta in `i18n.js`: 227 chiavi di traduzione
 nelle 4 lingue, 20 sessioni di programma, 5 tariffe, 4 extra, relatori e sponsor segnaposto.
 
-### 3. Configura Cloudflare Pages
+### 3. Deploy
 
-Nelle impostazioni del progetto:
+Dal tuo computer basta:
+
+```bash
+npm run deploy
+```
+
+Se invece deploya Cloudflare a ogni push, nelle impostazioni del Worker
+(**Settings → Build**) serve:
 
 | Campo | Valore |
 |---|---|
-| Framework preset | None |
 | Build command | *(vuoto)* |
-| **Build output directory** | **`public`** ← era `/`, va cambiato |
+| Deploy command | `npx wrangler deploy` |
 | Production branch | `main` |
 
-Poi **Settings → Functions → D1 database bindings**: aggiungi il binding
-`DB` → `eeba-2027`, sia per Production che per Preview.
+Non impostare `CLOUDFLARE_API_TOKEN` fra le variabili: se c'è, wrangler lo usa
+al posto delle credenziali della build e serve che abbia i permessi
+`Workers Scripts: Edit` e `D1: Edit`, altrimenti il deploy fallisce con
+`Authentication error [code: 10000]`.
+
+Il binding D1 e la cartella degli asset vengono da `wrangler.toml`: non c'è
+nulla da configurare a mano nel pannello.
 
 ### 4. Primo accesso
 
@@ -74,9 +94,12 @@ l'endpoint di setup si chiude da solo.
 ```bash
 npm run db:schema:local
 npm run db:seed:local
-npm run dev          # → http://localhost:8788
+npm run dev          # → http://localhost:8787
 npm test             # 75 test, nessuna dipendenza esterna
 ```
+
+I test non toccano Cloudflare: eseguono il router vero (`src/api.js`) contro un
+SQLite in memoria che imita il binding D1.
 
 ---
 

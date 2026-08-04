@@ -1,6 +1,6 @@
 /* ==========================================================================
-   EEBA 2027 — API (Cloudflare Pages Functions + D1)
-   Router unico su /api/*. Binding D1 atteso: env.DB
+   EEBA 2027 — API (Cloudflare Worker + D1)
+   Router unico su /api/*, invocato da src/index.js. Binding D1 atteso: env.DB
    ========================================================================== */
 
 const COOKIE = "eeba_sess";

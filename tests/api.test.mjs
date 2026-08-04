@@ -41,7 +41,7 @@ function makeDB() {
 }
 
 /* --------------------------------------------------- carica il router */
-const routerSrc = readFileSync(join(ROOT, "functions/api/[[path]].js"), "utf8");
+const routerSrc = readFileSync(join(ROOT, "src/api.js"), "utf8");
 const tmp = join(tmpdir(), `eeba-router-${Date.now()}.mjs`);
 writeFileSync(tmp, routerSrc);
 const { onRequest } = await import(pathToFileURL(tmp).href);

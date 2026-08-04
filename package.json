@@ -3,7 +3,8 @@
   "private": true,
   "description": "Sito e backoffice del XXXVIII Congresso EEBA — Leuven, 8-10 aprile 2027",
   "scripts": {
-    "dev": "wrangler pages dev public --d1=DB",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
     "seed": "node schema/generate-seed.js",
     "test": "node tests/api.test.mjs",
     "db:create": "wrangler d1 create eeba-2027",
