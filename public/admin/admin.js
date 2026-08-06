@@ -10,6 +10,8 @@ const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 
 let ME = null;
 let LANGS = ["en", "it", "nl", "fr"];
+let SETTINGS = {};          // cache delle impostazioni, aggiornata a ogni accesso
+let TR = {};                // cache delle traduzioni, per le etichette leggibili
 const LANG_LABEL = { en: "English", it: "Italiano", nl: "Nederlands", fr: "Français", de: "Deutsch", es: "Español" };
 
 /* ------------------------------------------------------------------ utils */
@@ -93,14 +95,47 @@ async function showApp() {
   $("#meAv").textContent = (ME.name || ME.email).trim().slice(0, 2).toUpperCase();
   $("#navUsers").classList.toggle("hidden", !isAdmin());
 
-  try {
-    const s = await api("/admin/settings");
-    const l = s.results.find(r => r.skey === "languages");
-    if (l && l.svalue) LANGS = l.svalue.split(",").map(x => x.trim()).filter(Boolean);
-  } catch {}
-
+  await refreshConfig();
   route();
 }
+
+/* Impostazioni e traduzioni servono ovunque: date delle giornate, tipi di
+   sessione, etichette dei ruoli. Si caricano una volta per sessione. */
+async function refreshConfig() {
+  try {
+    const s = await api("/admin/settings");
+    SETTINGS = Object.fromEntries(s.results.map(r => [r.skey, r.svalue]));
+    if (SETTINGS.languages) LANGS = SETTINGS.languages.split(",").map(x => x.trim()).filter(Boolean);
+    applyTheme(SETTINGS);
+  } catch {}
+  try {
+    const t = await api("/admin/translations");
+    TR = Object.fromEntries(t.results.map(r => [r.tkey, r.value_json]));
+  } catch {}
+}
+
+/* Etichetta tradotta di una chiave, preferendo l'italiano nel backoffice. */
+const label = (key, fallback) => {
+  const v = TR[key];
+  return (v && (v.it || v.en || Object.values(v).find(Boolean))) || fallback || key;
+};
+
+const eventDays = () => Math.max(1, Math.min(14, Number(SETTINGS.event_days) || 3));
+const tagCodes = () => String(SETTINGS.session_tags || "key,lab,soc,sym,free,ind,ws")
+  .split(",").map(s => s.trim()).filter(Boolean);
+
+/* Etichetta di una giornata calcolata dalla data di inizio: si aggiorna da sola
+   quando cambiano le date dell'evento. */
+function dayHeading(n) {
+  const start = new Date(SETTINGS.event_start || "");
+  const word = label("prog.dayWord", "Giorno");
+  if (isNaN(start)) return `${word} ${n}`;
+  const d = new Date(start.getTime() + (n - 1) * 86400e3);
+  return `${word} ${n} — ${d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}`;
+}
+
+/* Ruoli: nel database c'è il codice r0…rN, qui si mostra l'etichetta. */
+const roleLabel = code => code ? label("reg.roles." + code, code) : "—";
 
 $("#loginForm").addEventListener("submit", async e => {
   e.preventDefault();
@@ -143,12 +178,15 @@ $("#themeBtn").addEventListener("click", () => {
   const next = currentTheme() === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
   try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+  applyTheme(SETTINGS);              // l'accento cambia fra chiaro e scuro
+  if (location.hash.includes("appearance")) route();
 });
 
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   let saved = null;
   try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
   if (!saved) delete document.documentElement.dataset.theme;
+  applyTheme(SETTINGS);
 });
 
 $("#burger2").addEventListener("click", () => document.body.classList.toggle("nav-open"));
@@ -461,7 +499,7 @@ function openReg(r, tierName, statusLabel, reload) {
         <dt>Delegato</dt><dd>${esc(r.first_name)} ${esc(r.last_name)}</dd>
         <dt>Email</dt><dd><a href="mailto:${esc(r.email)}">${esc(r.email)}</a></dd>
         <dt>Ente</dt><dd>${esc(r.org || "—")}</dd>
-        <dt>Ruolo</dt><dd>${esc(r.role || "—")}</dd>
+        <dt>Ruolo</dt><dd>${esc(roleLabel(r.role))}</dd>
         <dt>Paese</dt><dd>${esc(r.country || "—")}</dd>
         <dt>P. IVA</dt><dd>${esc(r.vat || "—")}</dd>
         <dt>Esigenze alim.</dt><dd>${esc(r.diet || "—")}</dd>
@@ -513,18 +551,25 @@ function openReg(r, tierName, statusLabel, reload) {
 /* ========================================================= PROGRAMMA */
 VIEWS.programme = async function () {
   const d = await api("/admin/programme");
-  const TAGS = { key: "Lettura", lab: "Wetlab", soc: "Sociale", sym: "Simposio", free: "Comunicazioni", ind: "Industria", ws: "Workshop" };
+  const days = eventDays();
+  // Tipi di sessione: codici dalle impostazioni, etichette dalle traduzioni.
+  const TAGS = Object.fromEntries(tagCodes().map(c => [c, label("prog.tag." + c, c)]));
 
-  setHeader("Programma", "Sessioni delle tre giornate — pubblicate subito sul sito",
+  setHeader("Programma", `Sessioni delle ${days} giornate — pubblicate subito sul sito`,
     canWrite() ? [{ label: "+ Nuova sessione", cls: "btn--primary", onClick: () => editSlot(null) }] : []);
 
-  const byDay = { 1: [], 2: [], 3: [] };
-  d.results.forEach(s => byDay[s.day_no]?.push(s));
-  const dayLabel = { 1: "Giorno 1 — giovedì 8 aprile", 2: "Giorno 2 — venerdì 9 aprile", 3: "Giorno 3 — sabato 10 aprile" };
+  const byDay = {};
+  for (let i = 1; i <= days; i++) byDay[i] = [];
+  const orphans = [];
+  d.results.forEach(s => byDay[s.day_no] ? byDay[s.day_no].push(s) : orphans.push(s));
 
-  $("#view").innerHTML = [1, 2, 3].map(day => `
+  $("#view").innerHTML = (orphans.length ? `<div class="alert alert--info">
+      ${orphans.length} session${orphans.length === 1 ? "e" : "i"} ${orphans.length === 1 ? "è" : "sono"} su giornate
+      oltre le ${days} configurate e non compaiono sul sito. Aumenta <code>event_days</code> in
+      Impostazioni oppure spostale.</div>` : "") +
+    Array.from({ length: days }, (_, i) => i + 1).map(day => `
     <div class="card" style="margin-bottom:16px">
-      <div class="card__h"><h3>${dayLabel[day]}</h3>
+      <div class="card__h"><h3>${dayHeading(day)}</h3>
         <span class="pill pill--plain">${byDay[day].length} sessioni</span></div>
       <div class="tblwrap"><table>
         <thead><tr><th style="width:80px">Ora</th><th>Titolo (IT)</th><th>Tipo</th><th>Stato</th><th></th></tr></thead>
@@ -552,7 +597,8 @@ VIEWS.programme = async function () {
       body: `
         <div class="f-row-3">
           <div class="f"><label>Giornata</label><select id="sDay">
-            ${[1, 2, 3].map(n => `<option value="${n}" ${s.day_no === n ? "selected" : ""}>Giorno ${n}</option>`).join("")}
+            ${Array.from({ length: days }, (_, i) => i + 1).map(n =>
+              `<option value="${n}" ${s.day_no === n ? "selected" : ""}>${dayHeading(n)}</option>`).join("")}
           </select></div>
           <div class="f"><label>Ora</label><input id="sTime" value="${esc(s.time)}" placeholder="09:00"></div>
           <div class="f"><label>Ordine</label><input id="sSort" type="number" value="${s.sort ?? 0}"></div>
@@ -921,6 +967,178 @@ VIEWS.pricing = async function () {
     });
     bindLangTabs();
   }
+};
+
+/* ========================================================== ASPETTO */
+VIEWS.appearance = async function () {
+  const s = await api("/admin/settings");
+  const cur = Object.fromEntries(s.results.map(r => [r.skey, r.svalue]));
+  const ro = !canWrite();
+
+  setHeader("Aspetto e logo", "Palette e marchio dell'evento — valgono per il sito e per questo backoffice", []);
+
+  const swatch = (id, t) => {
+    const on = cur.theme_preset === id && !isHex(cur.theme_accent);
+    return `<button type="button" class="preset ${on ? "is-on" : ""}" data-preset="${id}" ${ro ? "disabled" : ""}>
+      <span class="preset__bars">
+        <span style="background:${t.light.accent}"></span>
+        <span style="background:${t.light.soft}"></span>
+        <span style="background:${t.dark.accent}"></span>
+      </span>
+      <b>${esc(t.label.it)}</b>
+      <span class="preset__hex">${t.light.accent}</span>
+    </button>`;
+  };
+
+  $("#view").innerHTML = `
+    <div class="grid-appearance">
+      <div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card__h"><h3>Palette</h3></div>
+          <div class="card__b">
+            <p class="hint" style="margin:0 0 16px">
+              I preset cambiano solo il colore d'accento: sfondi, testi e bordi restano
+              quelli del design system, che è la parte da cui dipende la leggibilità.
+              Ogni preset ha una variante per il tema chiaro e una per lo scuro.</p>
+            <div class="presets">${Object.entries(THEMES).map(([id, t]) => swatch(id, t)).join("")}</div>
+
+            <div style="border-top:1px solid var(--line); margin-top:20px; padding-top:18px">
+              <div class="f" style="margin:0">
+                <label for="accHex">Colore d'accento personalizzato</label>
+                <div style="display:flex; gap:10px; align-items:center">
+                  <input type="color" id="accPick" value="${isHex(cur.theme_accent) ? norm(cur.theme_accent) : "#0057D9"}"
+                         style="width:44px; height:38px; padding:2px" ${ro ? "disabled" : ""}>
+                  <input id="accHex" value="${esc(cur.theme_accent || "")}" placeholder="lascia vuoto per usare il preset"
+                         style="flex:1; font-family:var(--mono)" ${ro ? "disabled" : ""}>
+                  <button class="btn btn--subtle btn--sm" id="accClear" ${ro ? "disabled" : ""}>Azzera</button>
+                </div>
+                <p class="hint">Se lo compili, ha la precedenza sul preset. Le varianti per il tema
+                   scuro e per gli sfondi tenui vengono ricavate da questo colore, e se serve
+                   viene spostato quel tanto che basta a mantenere il contrasto leggibile.</p>
+                <div id="accWarn"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__h"><h3>Logo</h3></div>
+          <div class="card__b">
+            <div class="f">
+              <label for="logoUrl">URL dell'immagine</label>
+              <input id="logoUrl" value="${esc(cur.logo_url || "")}" placeholder="https://…/logo.svg" ${ro ? "disabled" : ""}>
+              <p class="hint">PNG o SVG già ospitato online. Viene ridimensionato in altezza.</p>
+            </div>
+            <div class="f">
+              <label for="logoSvg">oppure codice SVG</label>
+              <textarea id="logoSvg" rows="5" style="font-family:var(--mono); font-size:12px"
+                        placeholder="&lt;svg viewBox=&quot;0 0 32 32&quot;&gt;…&lt;/svg&gt;" ${ro ? "disabled" : ""}>${esc(cur.logo_svg || "")}</textarea>
+              <p class="hint">Ha la precedenza sull'URL. Conviene: nessuna dipendenza esterna e si
+                 adatta al tema se usa <code>currentColor</code>. Lasciando entrambi vuoti resta il segno di default.</p>
+            </div>
+            ${ro ? "" : `<button class="btn btn--primary" id="saveAppearance">Salva aspetto</button>`}
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="position:sticky; top:80px; align-self:start">
+        <div class="card__h"><h3>Anteprima</h3></div>
+        <div class="card__b" id="preview"></div>
+      </div>
+    </div>`;
+
+  /* ---- anteprima dal vivo ---- */
+  const state = { preset: cur.theme_preset || DEFAULT_THEME, accent: cur.theme_accent || "" };
+
+  function drawPreview() {
+    const t = resolveTheme({ theme_preset: state.preset, theme_accent: state.accent });
+    const logo = logoHtml({ logo_url: $("#logoUrl").value, logo_svg: $("#logoSvg").value },
+      { fallback: `<svg viewBox="0 0 32 32" style="width:28px;height:28px">
+          <circle cx="16" cy="16" r="14.5" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".22"/>
+          <circle cx="16" cy="16" r="10" fill="none" stroke="${t.light.accent}" stroke-width="1.4"/>
+          <circle cx="16" cy="16" r="4.6" fill="${t.light.accent}"/></svg>` });
+
+    const card = (mode, v, bg, ink, line) => `
+      <div style="border:1px solid ${line}; border-radius:10px; overflow:hidden; margin-bottom:12px">
+        <div style="background:${bg}; color:${ink}; padding:16px">
+          <div style="display:flex; align-items:center; gap:9px; margin-bottom:14px">
+            <span style="height:28px; display:block; color:${ink}">${logo}</span>
+            <b style="font-size:13px; letter-spacing:-.02em">EEBA 2027</b>
+            <span style="margin-left:auto; font-family:var(--mono); font-size:9px; letter-spacing:.12em;
+                         text-transform:uppercase; opacity:.55">${mode}</span>
+          </div>
+          <div style="font-size:19px; font-weight:600; letter-spacing:-.03em; margin-bottom:12px">
+            Eye banking, <span style="color:${v.accent}">from theory</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+            <span style="background:${v.accent}; color:${mode === "Scuro" ? "#08101C" : "#fff"};
+                         padding:7px 15px; border-radius:100px; font-size:12.5px; font-weight:500">Iscriviti</span>
+            <span style="background:${v.soft}; color:${v.ink}; padding:7px 13px; border-radius:100px;
+                         font-size:11px; font-family:var(--mono); letter-spacing:.1em; text-transform:uppercase">Early bird</span>
+            <span style="color:${v.accent}; font-size:12.5px">Vedi il programma →</span>
+          </div>
+        </div>
+      </div>`;
+
+    $("#preview").innerHTML =
+      card("Chiaro", t.light, "#FFFFFF", "#0B0E13", "#E2E7EC") +
+      card("Scuro",  t.dark,  "#0C1016", "#E8EDF3", "#212934") +
+      `<p class="hint" style="margin:4px 0 0">
+         ${t.custom ? "Accento personalizzato " + t.custom : "Preset " + esc(THEMES[t.preset].label.it)}
+       </p>`;
+
+    // avviso se il colore scelto è stato corretto per il contrasto
+    const warn = $("#accWarn");
+    if (t.custom && norm(t.custom) !== t.light.accent) {
+      warn.innerHTML = `<div class="alert alert--info" style="margin:12px 0 0">
+        Sul fondo chiaro il colore è stato scurito a <code>${t.light.accent}</code> per restare
+        leggibile. Il colore che hai scelto resta salvato.</div>`;
+    } else warn.innerHTML = "";
+  }
+
+  $$("[data-preset]").forEach(b => b.addEventListener("click", () => {
+    state.preset = b.dataset.preset;
+    state.accent = "";
+    $("#accHex").value = "";
+    $$("[data-preset]").forEach(x => x.classList.toggle("is-on", x === b));
+    drawPreview();
+  }));
+
+  $("#accPick")?.addEventListener("input", e => {
+    state.accent = e.target.value; $("#accHex").value = e.target.value;
+    $$("[data-preset]").forEach(x => x.classList.remove("is-on"));
+    drawPreview();
+  });
+  $("#accHex")?.addEventListener("input", e => {
+    const v = e.target.value.trim();
+    state.accent = isHex(v) ? v : "";
+    if (isHex(v)) { $("#accPick").value = norm(v); $$("[data-preset]").forEach(x => x.classList.remove("is-on")); }
+    drawPreview();
+  });
+  $("#accClear")?.addEventListener("click", () => {
+    state.accent = ""; $("#accHex").value = "";
+    $$("[data-preset]").forEach(x => x.classList.toggle("is-on", x.dataset.preset === state.preset));
+    drawPreview();
+  });
+  $("#logoUrl")?.addEventListener("input", drawPreview);
+  $("#logoSvg")?.addEventListener("input", drawPreview);
+
+  $("#saveAppearance")?.addEventListener("click", async () => {
+    const svg = $("#logoSvg").value.trim();
+    if (svg && !svg.startsWith("<svg")) return toast("Il codice SVG deve iniziare con <svg", true);
+    try {
+      await apiJson("/admin/settings", "PATCH", {
+        theme_preset: state.preset,
+        theme_accent: state.accent,
+        logo_url: $("#logoUrl").value.trim(),
+        logo_svg: svg
+      });
+      await refreshConfig();
+      toast("Aspetto salvato — online al prossimo caricamento del sito");
+    } catch (e) { toast(e.message, true); }
+  });
+
+  drawPreview();
 };
 
 /* ====================================================== IMPOSTAZIONI */

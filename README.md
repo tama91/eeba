@@ -18,6 +18,7 @@ public/              → sito statico, servito dal binding ASSETS
   404.html
   _headers             intestazioni di sicurezza
   admin/               backoffice (SPA)
+  theme.js             palette e logo, condiviso fra sito e backoffice
 src/
   index.js             entry del Worker: /api/* → api.js, il resto → ASSETS
   api.js               tutta l'API, router unico
@@ -25,7 +26,10 @@ schema/
   schema.sql           tabelle D1
   seed.sql             dati iniziali (generato)
   generate-seed.js     rigenera seed.sql da public/i18n.js
-tests/api.test.mjs     75 test d'integrazione sull'API reale
+  migrations/          modifiche allo schema, da applicare in ordine
+tests/
+  api.test.mjs         106 test d'integrazione sull'API reale
+  theme.test.mjs       117 controlli di contrasto sulle palette
 wrangler.toml
 ```
 
@@ -55,7 +59,13 @@ npm run db:schema
 npm run db:seed
 ```
 
-Il seed importa nel database tutto ciò che oggi sta in `i18n.js`: 227 chiavi di traduzione
+Se il database esiste già da prima, applica anche le migrazioni:
+
+```bash
+npm run db:migrate
+```
+
+Il seed importa nel database tutto ciò che oggi sta in `i18n.js`: 236 chiavi di traduzione
 nelle 4 lingue, 20 sessioni di programma, 5 tariffe, 4 extra, relatori e sponsor segnaposto.
 
 ### 3. Deploy
@@ -119,7 +129,7 @@ l'endpoint di setup si chiude da solo.
 npm run db:schema:local
 npm run db:seed:local
 npm run dev          # → http://localhost:8787
-npm test             # 75 test, nessuna dipendenza esterna
+npm test             # 223 test, nessuna dipendenza esterna
 ```
 
 I test non toccano Cloudflare: eseguono il router vero (`src/api.js`) contro un
@@ -144,7 +154,17 @@ Le schede segnano con un pallino rosso le lingue ancora vuote. Ogni salvataggio 
 **Tariffe ed extra** — prezzi early bird e pieni, capienza, attivazione/sospensione.
 I prezzi si inseriscono in euro e vengono salvati in centesimi.
 
-**Impostazioni** — date evento, scadenza early bird, lingue attive, apertura iscrizioni, sede.
+**Aspetto e logo** — sei palette preimpostate più un accento personalizzato, e il logo
+dell'evento come URL o come SVG incollato. Anteprima dal vivo su fondo chiaro e scuro.
+
+I preset cambiano solo la famiglia dell'accento: sfondi, testi e bordi restano quelli
+del design system, perché è da lì che dipende la leggibilità. Un accento personalizzato
+viene spostato quel tanto che basta a mantenere il contrasto minimo — un giallo acceso
+su fondo bianco viene scurito, e il backoffice te lo dice.
+
+**Impostazioni** — date evento, numero di giornate, scadenza early bird, lingue attive,
+tipi di sessione, apertura iscrizioni, sede. I valori sono validati lato server: le
+giornate accettano solo 1–14, i colori solo esadecimali, le lingue solo codici a due lettere.
 
 **Utenti** — tre ruoli:
 
@@ -168,9 +188,19 @@ Questo vale anche per `public/index.html` aperto direttamente da disco, comodo p
 
 ### Aggiungere una lingua
 
-1. `i18n.js`: duplica un blocco lingua, traduci, aggiungi la voce in `LANGS`.
-2. Backoffice → Impostazioni → `languages`: aggiungi il codice (es. `en,it,nl,fr,de`).
-3. Le schede lingua nel backoffice compaiono da sole, con tutti i campi da riempire.
+Backoffice → Impostazioni → `languages`: aggiungi il codice (es. `en,it,nl,fr,de`).
+Le schede lingua compaiono da sole in tutti gli editor, e il selettore sul sito
+si aggiorna al caricamento successivo.
+
+Finché le traduzioni non sono compilate, quella lingua mostra i testi inglesi.
+Aggiungere anche un blocco in `public/i18n.js` serve solo a dare una riserva
+sensata se l'API non risponde — è facoltativo.
+
+### Cambiare la durata dell'evento
+
+Backoffice → Impostazioni → `event_days` (1–14). Schede del programma, pannelli,
+date delle giornate e statistiche si adeguano da sé. Se restano sessioni su giornate
+oltre il numero configurato, il backoffice lo segnala invece di nasconderle.
 
 ---
 
@@ -187,6 +217,10 @@ Cosa è già coperto, verificato dai test:
 - controllo di **origine** su tutte le scritture (difesa CSRF)
 - **freno ai tentativi di login**: 8 fallimenti in 15 minuti per email, poi 429
 - query esclusivamente **parametrizzate**; i nomi di colonna passano da una allowlist
+- **impostazioni validate lato server**: giornate 1–14, colori esadecimali, URL solo https
+- l'**SVG del logo viene sanificato** prima del salvataggio (via `<script>`, attributi `on*`,
+  `foreignObject`, URL `javascript:`): finisce nella pagina come markup, e un account
+  compromesso non deve poter iniettare codice nel sito pubblico
 - un amministratore non può declassare né eliminare se stesso (niente lock-out)
 - cambio password: chiude tutte le altre sessioni
 

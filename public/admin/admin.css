@@ -270,6 +270,25 @@ td .muted{ color:var(--ink-45); font-size:12.5px; }
 }
 @media (max-width:560px){ .kpis{ grid-template-columns:1fr; } }
 
+/* ------------------------------------------------------------- ASPETTO */
+.grid-appearance{ display:grid; grid-template-columns:1.15fr .85fr; gap:16px; align-items:start; }
+
+.presets{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+.preset{
+  display:flex; flex-direction:column; gap:9px; align-items:flex-start; text-align:left;
+  padding:13px 14px; border:1px solid var(--line); border-radius:10px;
+  background:var(--paper); cursor:pointer; transition:border-color .18s, background .18s;
+}
+.preset:hover{ border-color:var(--line-2); }
+.preset.is-on{ border-color:var(--accent); background:var(--accent-soft); }
+.preset[disabled]{ opacity:.5; pointer-events:none; }
+.preset b{ font-size:13.5px; font-weight:500; }
+.preset__bars{ display:flex; gap:3px; width:100%; }
+.preset__bars span{ height:16px; flex:1; border-radius:3px; }
+.preset__hex{ font-family:var(--mono); font-size:10.5px; color:var(--ink-45); }
+
+@media (max-width:1100px){ .grid-appearance{ grid-template-columns:1fr; } }
+
 /* ==========================================================================
    TEMA SCURO — segue il sistema, salvo scelta esplicita (data-theme su html)
    ========================================================================== */

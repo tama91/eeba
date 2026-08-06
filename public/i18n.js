@@ -31,7 +31,7 @@ en: {
     sub:"The XXXVIII Annual Meeting of the European Eye Bank Association, hosted with KU Leuven and University Hospital Leuven. Three days, four months before the EU SoHO Regulation becomes binding.",
   },
   count: { d:"Days", h:"Hours", m:"Min", s:"Sec", over:"The meeting has begun" },
-  ticker: ["XXXVIII EEBA Annual Meeting","University Hall · Leuven","Symposia · Workshops · Wetlabs","EU SoHO Regulation readiness","Abstract deadline 15 Dec 2026","Early bird until 15 Jan 2027","In collaboration with KU Leuven"],
+  ticker: { items:"XXXVIII EEBA Annual Meeting|University Hall · Leuven|Symposia · Workshops · Wetlabs|EU SoHO Regulation readiness|Abstract deadline 15 Dec 2026|Early bird until 15 Jan 2027|In collaboration with KU Leuven" },
 
   about: {
     eye:"About the meeting", n:"01",
@@ -44,7 +44,8 @@ en: {
     c3t:"Regulatory clinic", c3d:"Compliance hurdles, final technical guidelines and 'day one' readiness under SoHO.",
     c4t:"Peer network", c4d:"Eye bankers, clinicians, researchers and industry partners from across Europe and beyond."
   },
-  stats: { a:"Days", ad:"of programme, 8–10 April 2027",
+  stats: { av:"{days}", bv:"30+", cv:"{sessions}", dv:"{months}",
+           a:"Days", ad:"of programme, 8–10 April 2027",
            b:"Countries", bd:"represented in the EEBA network",
            c:"Sessions", cd:"symposia, workshops and wetlabs",
            d:"Months", dd:"until SoHO becomes legally binding" },
@@ -65,8 +66,8 @@ en: {
     eye:"Programme", n:"03",
     t1:"Three days,", t2:"one working agenda.",
     lead:"Provisional structure. The detailed scientific programme is published as sessions are confirmed by the Organising Committee.",
-    d1:"Day 1", d1d:"Thu 8 April", d2:"Day 2", d2d:"Fri 9 April", d3:"Day 3", d3d:"Sat 10 April",
-    tagKey:"Keynote", tagLab:"Wetlab", tagSoc:"Social", tagSym:"Symposium", tagFree:"Free papers", tagInd:"Industry", tagWs:"Workshop",
+    dayWord:"Day",
+    tag:{ key:"Keynote", lab:"Wetlab", soc:"Social", sym:"Symposium", free:"Free papers", ind:"Industry", ws:"Workshop" },
     day1:[
       {t:"08:30", h:"Registration & welcome coffee", p:"Badge collection, delegate pack, exhibition opens."},
       {t:"10:00", h:"Wetlab session A", p:"Tissue preparation and evaluation. Limited capacity, pre-booking required.", tag:"lab"},
@@ -99,7 +100,7 @@ en: {
     eye:"Speakers", n:"04",
     t1:"Faculty", t2:"to be announced.",
     lead:"The Organising Committee is finalising the faculty. Confirmed speakers will be published here as invitations are accepted — the placeholders below show how the section will look.",
-    r1:"Keynote lecture", r2:"Symposium chair", r3:"Regulatory session", r4:"Wetlab faculty",
+    r1:"Keynote lecture", r2:"Symposium chair", r3:"Regulatory session", r4:"Wetlab faculty", tba:"TBA",
     note:"Are you interested in contributing to the scientific programme? Submit an abstract or contact the Secretariat."
   },
 
@@ -141,8 +142,8 @@ en: {
     f:{ fn:"First name", ln:"Last name", em:"Email", em2:"Confirm email", org:"Institution / Company",
         role:"Role", country:"Country", vat:"VAT / Tax number", vatHint:"Optional — for institutional invoicing",
         diet:"Dietary requirements", dietHint:"Optional — allergies, vegetarian, vegan, other",
-        rolePick:"Select a role", countryPick:"Select a country",
-        roles:["Eye bank director","Eye bank technician","Ophthalmologist / Surgeon","Researcher","Nurse / Coordinator","Quality / Regulatory","Industry","Other"] },
+        rolePick:"Select a role", countryPick:"Select a country" },
+    roles:{ r0:"Eye bank director", r1:"Eye bank technician", r2:"Ophthalmologist / Surgeon", r3:"Researcher", r4:"Nurse / Coordinator", r5:"Quality / Regulatory", r6:"Industry", r7:"Other" },
     consent1:"I accept the terms of participation and the cancellation policy.",
     consent2:"I agree to the processing of my data for the organisation of the meeting (GDPR).",
     consent3:"I would like to receive news about EEBA meetings and webinars.",
@@ -228,7 +229,7 @@ it: {
     sub:"Il XXXVIII Congresso Annuale della European Eye Bank Association, ospitato con KU Leuven e l'Ospedale Universitario di Lovanio. Tre giorni, quattro mesi prima che il Regolamento europeo SoHO diventi vincolante.",
   },
   count: { d:"Giorni", h:"Ore", m:"Min", s:"Sec", over:"Il congresso è iniziato" },
-  ticker: ["XXXVIII Congresso EEBA","University Hall · Lovanio","Simposi · Workshop · Wetlab","Pronti per il Regolamento SoHO","Abstract entro il 15 dic 2026","Early bird fino al 15 gen 2027","In collaborazione con KU Leuven"],
+  ticker: { items:"XXXVIII Congresso EEBA|University Hall · Lovanio|Simposi · Workshop · Wetlab|Pronti per il Regolamento SoHO|Abstract entro il 15 dic 2026|Early bird fino al 15 gen 2027|In collaborazione con KU Leuven" },
 
   about: {
     eye:"Il congresso", n:"01",
@@ -241,7 +242,8 @@ it: {
     c3t:"Clinica normativa", c3d:"Ostacoli di conformità, linee guida tecniche definitive e prontezza al 'giorno uno' SoHO.",
     c4t:"Rete di colleghi", c4d:"Eye banker, clinici, ricercatori e partner industriali da tutta Europa e oltre."
   },
-  stats: { a:"Giorni", ad:"di programma, 8–10 aprile 2027",
+  stats: { av:"{days}", bv:"30+", cv:"{sessions}", dv:"{months}",
+           a:"Giorni", ad:"di programma, 8–10 aprile 2027",
            b:"Paesi", bd:"rappresentati nella rete EEBA",
            c:"Sessioni", cd:"tra simposi, workshop e wetlab",
            d:"Mesi", dd:"prima che SoHO diventi vincolante" },
@@ -262,8 +264,8 @@ it: {
     eye:"Programma", n:"03",
     t1:"Tre giorni,", t2:"un'unica agenda di lavoro.",
     lead:"Struttura provvisoria. Il programma scientifico dettagliato viene pubblicato man mano che le sessioni sono confermate dal Comitato Organizzatore.",
-    d1:"Giorno 1", d1d:"Gio 8 aprile", d2:"Giorno 2", d2d:"Ven 9 aprile", d3:"Giorno 3", d3d:"Sab 10 aprile",
-    tagKey:"Lettura", tagLab:"Wetlab", tagSoc:"Sociale", tagSym:"Simposio", tagFree:"Comunicazioni", tagInd:"Industria", tagWs:"Workshop",
+    dayWord:"Giorno",
+    tag:{ key:"Lettura", lab:"Wetlab", soc:"Sociale", sym:"Simposio", free:"Comunicazioni", ind:"Industria", ws:"Workshop" },
     day1:[
       {t:"08:30", h:"Registrazione e coffee di benvenuto", p:"Ritiro badge, kit congressuale, apertura dell'area espositiva."},
       {t:"10:00", h:"Wetlab sessione A", p:"Preparazione e valutazione del tessuto. Posti limitati, prenotazione obbligatoria.", tag:"lab"},
@@ -296,7 +298,7 @@ it: {
     eye:"Relatori", n:"04",
     t1:"Faculty", t2:"in via di definizione.",
     lead:"Il Comitato Organizzatore sta completando la faculty. I relatori confermati saranno pubblicati qui man mano che accettano l'invito — i segnaposto qui sotto mostrano come apparirà la sezione.",
-    r1:"Lettura magistrale", r2:"Moderatore di simposio", r3:"Sessione normativa", r4:"Faculty wetlab",
+    r1:"Lettura magistrale", r2:"Moderatore di simposio", r3:"Sessione normativa", r4:"Faculty wetlab", tba:"Da definire",
     note:"Vuoi contribuire al programma scientifico? Invia un abstract o contatta la Segreteria."
   },
 
@@ -338,8 +340,8 @@ it: {
     f:{ fn:"Nome", ln:"Cognome", em:"Email", em2:"Conferma email", org:"Ente / Azienda",
         role:"Ruolo", country:"Paese", vat:"Partita IVA / Codice fiscale", vatHint:"Facoltativo — per la fatturazione istituzionale",
         diet:"Esigenze alimentari", dietHint:"Facoltativo — allergie, vegetariano, vegano, altro",
-        rolePick:"Seleziona un ruolo", countryPick:"Seleziona un paese",
-        roles:["Direttore banca degli occhi","Tecnico banca degli occhi","Oculista / Chirurgo","Ricercatore","Infermiere / Coordinatore","Qualità / Regolatorio","Industria","Altro"] },
+        rolePick:"Seleziona un ruolo", countryPick:"Seleziona un paese" },
+    roles:{ r0:"Direttore banca degli occhi", r1:"Tecnico banca degli occhi", r2:"Oculista / Chirurgo", r3:"Ricercatore", r4:"Infermiere / Coordinatore", r5:"Qualità / Regolatorio", r6:"Industria", r7:"Altro" },
     consent1:"Accetto le condizioni di partecipazione e la politica di cancellazione.",
     consent2:"Acconsento al trattamento dei miei dati per l'organizzazione del congresso (GDPR).",
     consent3:"Desidero ricevere notizie sui congressi e i webinar EEBA.",
@@ -425,7 +427,7 @@ nl: {
     sub:"De XXXVIIIe Jaarvergadering van de European Eye Bank Association, georganiseerd met KU Leuven en UZ Leuven. Drie dagen, vier maanden voordat de Europese SoHO-verordening bindend wordt.",
   },
   count: { d:"Dagen", h:"Uren", m:"Min", s:"Sec", over:"De vergadering is begonnen" },
-  ticker: ["XXXVIIIe EEBA Jaarvergadering","Universiteitshal · Leuven","Symposia · Workshops · Wetlabs","Klaar voor de SoHO-verordening","Abstracts tot 15 dec 2026","Early bird tot 15 jan 2027","In samenwerking met KU Leuven"],
+  ticker: { items:"XXXVIIIe EEBA Jaarvergadering|Universiteitshal · Leuven|Symposia · Workshops · Wetlabs|Klaar voor de SoHO-verordening|Abstracts tot 15 dec 2026|Early bird tot 15 jan 2027|In samenwerking met KU Leuven" },
 
   about: {
     eye:"Over de vergadering", n:"01",
@@ -438,7 +440,8 @@ nl: {
     c3t:"Regelgevingskliniek", c3d:"Nalevingsdrempels, definitieve technische richtlijnen en 'dag één'-gereedheid onder SoHO.",
     c4t:"Collegiaal netwerk", c4d:"Oogbankmedewerkers, clinici, onderzoekers en industriepartners uit heel Europa en daarbuiten."
   },
-  stats: { a:"Dagen", ad:"programma, 8–10 april 2027",
+  stats: { av:"{days}", bv:"30+", cv:"{sessions}", dv:"{months}",
+           a:"Dagen", ad:"programma, 8–10 april 2027",
            b:"Landen", bd:"vertegenwoordigd in het EEBA-netwerk",
            c:"Sessies", cd:"symposia, workshops en wetlabs",
            d:"Maanden", dd:"tot SoHO juridisch bindend wordt" },
@@ -459,8 +462,8 @@ nl: {
     eye:"Programma", n:"03",
     t1:"Drie dagen,", t2:"één werkagenda.",
     lead:"Voorlopige structuur. Het gedetailleerde wetenschappelijke programma wordt gepubliceerd zodra sessies door het organiserend comité zijn bevestigd.",
-    d1:"Dag 1", d1d:"Do 8 april", d2:"Dag 2", d2d:"Vr 9 april", d3:"Dag 3", d3d:"Za 10 april",
-    tagKey:"Keynote", tagLab:"Wetlab", tagSoc:"Sociaal", tagSym:"Symposium", tagFree:"Vrije voordracht", tagInd:"Industrie", tagWs:"Workshop",
+    dayWord:"Dag",
+    tag:{ key:"Keynote", lab:"Wetlab", soc:"Sociaal", sym:"Symposium", free:"Vrije voordracht", ind:"Industrie", ws:"Workshop" },
     day1:[
       {t:"08:30", h:"Registratie & welkomstkoffie", p:"Badge afhalen, deelnemerspakket, opening expositie."},
       {t:"10:00", h:"Wetlab sessie A", p:"Weefselpreparatie en -evaluatie. Beperkte capaciteit, vooraf reserveren.", tag:"lab"},
@@ -493,7 +496,7 @@ nl: {
     eye:"Sprekers", n:"04",
     t1:"Faculty", t2:"wordt aangekondigd.",
     lead:"Het organiserend comité stelt de faculty samen. Bevestigde sprekers worden hier gepubliceerd zodra uitnodigingen zijn aanvaard — de plaatshouders hieronder tonen hoe deze sectie eruit zal zien.",
-    r1:"Keynotelezing", r2:"Symposiumvoorzitter", r3:"Sessie regelgeving", r4:"Wetlab faculty",
+    r1:"Keynotelezing", r2:"Symposiumvoorzitter", r3:"Sessie regelgeving", r4:"Wetlab faculty", tba:"Nog te bepalen",
     note:"Wilt u bijdragen aan het wetenschappelijk programma? Dien een abstract in of neem contact op met het secretariaat."
   },
 
@@ -535,8 +538,8 @@ nl: {
     f:{ fn:"Voornaam", ln:"Achternaam", em:"E-mail", em2:"Bevestig e-mail", org:"Instelling / Bedrijf",
         role:"Functie", country:"Land", vat:"Btw-nummer", vatHint:"Optioneel — voor institutionele facturatie",
         diet:"Dieetwensen", dietHint:"Optioneel — allergieën, vegetarisch, veganistisch, anders",
-        rolePick:"Kies een functie", countryPick:"Kies een land",
-        roles:["Directeur oogbank","Technicus oogbank","Oogarts / Chirurg","Onderzoeker","Verpleegkundige / Coördinator","Kwaliteit / Regelgeving","Industrie","Anders"] },
+        rolePick:"Kies een functie", countryPick:"Kies een land" },
+    roles:{ r0:"Directeur oogbank", r1:"Technicus oogbank", r2:"Oogarts / Chirurg", r3:"Onderzoeker", r4:"Verpleegkundige / Coördinator", r5:"Kwaliteit / Regelgeving", r6:"Industrie", r7:"Anders" },
     consent1:"Ik aanvaard de deelnamevoorwaarden en het annuleringsbeleid.",
     consent2:"Ik ga akkoord met de verwerking van mijn gegevens voor de organisatie van de vergadering (AVG).",
     consent3:"Ik ontvang graag nieuws over EEBA-vergaderingen en webinars.",
@@ -622,7 +625,7 @@ fr: {
     sub:"Le XXXVIIIe Congrès annuel de l'European Eye Bank Association, accueilli avec la KU Leuven et l'Hôpital universitaire de Louvain. Trois jours, quatre mois avant que le règlement européen SoHO ne devienne contraignant.",
   },
   count: { d:"Jours", h:"Heures", m:"Min", s:"Sec", over:"Le congrès a commencé" },
-  ticker: ["XXXVIIIe Congrès EEBA","Halle universitaire · Louvain","Symposiums · Ateliers · Wetlabs","Prêts pour le règlement SoHO","Résumés avant le 15 déc. 2026","Early bird jusqu'au 15 janv. 2027","En collaboration avec la KU Leuven"],
+  ticker: { items:"XXXVIIIe Congrès EEBA|Halle universitaire · Louvain|Symposiums · Ateliers · Wetlabs|Prêts pour le règlement SoHO|Résumés avant le 15 déc. 2026|Early bird jusqu'au 15 janv. 2027|En collaboration avec la KU Leuven" },
 
   about: {
     eye:"Le congrès", n:"01",
@@ -635,7 +638,8 @@ fr: {
     c3t:"Clinique réglementaire", c3d:"Obstacles de conformité, lignes directrices techniques finales et préparation au « jour un » SoHO.",
     c4t:"Réseau de pairs", c4d:"Professionnels des banques d'yeux, cliniciens, chercheurs et partenaires industriels de toute l'Europe et au-delà."
   },
-  stats: { a:"Jours", ad:"de programme, 8–10 avril 2027",
+  stats: { av:"{days}", bv:"30+", cv:"{sessions}", dv:"{months}",
+           a:"Jours", ad:"de programme, 8–10 avril 2027",
            b:"Pays", bd:"représentés dans le réseau EEBA",
            c:"Sessions", cd:"symposiums, ateliers et wetlabs",
            d:"Mois", dd:"avant que SoHO ne devienne contraignant" },
@@ -656,8 +660,8 @@ fr: {
     eye:"Programme", n:"03",
     t1:"Trois jours,", t2:"un seul ordre du jour.",
     lead:"Structure provisoire. Le programme scientifique détaillé est publié au fur et à mesure que les sessions sont confirmées par le comité d'organisation.",
-    d1:"Jour 1", d1d:"Jeu. 8 avril", d2:"Jour 2", d2d:"Ven. 9 avril", d3:"Jour 3", d3d:"Sam. 10 avril",
-    tagKey:"Plénière", tagLab:"Wetlab", tagSoc:"Social", tagSym:"Symposium", tagFree:"Communications", tagInd:"Industrie", tagWs:"Atelier",
+    dayWord:"Jour",
+    tag:{ key:"Plénière", lab:"Wetlab", soc:"Social", sym:"Symposium", free:"Communications", ind:"Industrie", ws:"Atelier" },
     day1:[
       {t:"08:30", h:"Accueil et café de bienvenue", p:"Retrait des badges, pochette congressiste, ouverture de l'exposition."},
       {t:"10:00", h:"Wetlab session A", p:"Préparation et évaluation des tissus. Places limitées, réservation obligatoire.", tag:"lab"},
@@ -690,7 +694,7 @@ fr: {
     eye:"Intervenants", n:"04",
     t1:"Faculty", t2:"à annoncer.",
     lead:"Le comité d'organisation finalise la faculty. Les intervenants confirmés seront publiés ici au fur et à mesure des acceptations — les emplacements ci-dessous montrent l'aspect final de la section.",
-    r1:"Conférence plénière", r2:"Présidence de symposium", r3:"Session réglementaire", r4:"Faculty wetlab",
+    r1:"Conférence plénière", r2:"Présidence de symposium", r3:"Session réglementaire", r4:"Faculty wetlab", tba:"À définir",
     note:"Vous souhaitez contribuer au programme scientifique ? Soumettez un résumé ou contactez le secrétariat."
   },
 
@@ -732,8 +736,8 @@ fr: {
     f:{ fn:"Prénom", ln:"Nom", em:"E-mail", em2:"Confirmer l'e-mail", org:"Établissement / Entreprise",
         role:"Fonction", country:"Pays", vat:"N° de TVA", vatHint:"Facultatif — pour la facturation institutionnelle",
         diet:"Régime alimentaire", dietHint:"Facultatif — allergies, végétarien, végan, autre",
-        rolePick:"Choisir une fonction", countryPick:"Choisir un pays",
-        roles:["Directeur de banque d'yeux","Technicien de banque d'yeux","Ophtalmologue / Chirurgien","Chercheur","Infirmier / Coordinateur","Qualité / Réglementaire","Industrie","Autre"] },
+        rolePick:"Choisir une fonction", countryPick:"Choisir un pays" },
+    roles:{ r0:"Directeur de banque d'yeux", r1:"Technicien de banque d'yeux", r2:"Ophtalmologue / Chirurgien", r3:"Chercheur", r4:"Infirmier / Coordinateur", r5:"Qualité / Réglementaire", r6:"Industrie", r7:"Autre" },
     consent1:"J'accepte les conditions de participation et la politique d'annulation.",
     consent2:"J'accepte le traitement de mes données pour l'organisation du congrès (RGPD).",
     consent3:"Je souhaite recevoir des nouvelles des congrès et webinaires EEBA.",

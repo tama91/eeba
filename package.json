@@ -6,12 +6,16 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "seed": "node schema/generate-seed.js",
-    "test": "node tests/api.test.mjs",
+    "test": "node tests/api.test.mjs && node tests/theme.test.mjs",
     "db:create": "wrangler d1 create eeba-2027",
     "db:schema": "wrangler d1 execute eeba-2027 --file=schema/schema.sql --remote",
     "db:seed": "wrangler d1 execute eeba-2027 --file=schema/seed.sql --remote",
     "db:schema:local": "wrangler d1 execute eeba-2027 --file=schema/schema.sql --local",
-    "db:seed:local": "wrangler d1 execute eeba-2027 --file=schema/seed.sql --local"
+    "db:seed:local": "wrangler d1 execute eeba-2027 --file=schema/seed.sql --local",
+    "test:api": "node tests/api.test.mjs",
+    "test:theme": "node tests/theme.test.mjs",
+    "db:migrate": "wrangler d1 execute eeba-2027 --file=schema/migrations/001-flexible-days-theme.sql --remote",
+    "db:migrate:local": "wrangler d1 execute eeba-2027 --file=schema/migrations/001-flexible-days-theme.sql --local"
   },
   "devDependencies": {
     "wrangler": "^4"

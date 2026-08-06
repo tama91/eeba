@@ -39,7 +39,14 @@ const settings = {
   venue_name:   "University Hall, Leuven",
   venue_maps:   "https://maps.app.goo.gl/1JEywDNpTEGTMjMs8",
   languages:    CODES.join(","),
-  registration_open: "1"
+  registration_open: "1",
+  event_days:       "3",
+  session_tags:     "key,lab,soc,sym,free,ind,ws",
+  stat_target_date: "2027-08-01",
+  theme_preset:     "clinical-blue",
+  theme_accent:     "",
+  logo_url:         "",
+  logo_svg:         ""
 };
 for (const [k, v] of Object.entries(settings)) {
   W(`INSERT INTO settings (skey, svalue) VALUES (${q(k)}, ${q(v)});`);
@@ -99,7 +106,7 @@ sponsorSeed.forEach(([name, tier], i) => {
 /* -------------------------------------------------------------- TRADUZIONI */
 /* Tutte le stringhe "piatte" di i18n.js, escluse quelle già gestite da
    tabelle dedicate (programma, tariffe, extra) e gli array. */
-const SKIP = /^(prog\.day[123]|reg\.tiers\.|reg\.add\.|ticker|reg\.f\.roles)/;
+const SKIP = /^(prog\.day[123]|reg\.tiers\.|reg\.add\.)/;
 
 function leaves(obj, prefix = "") {
   const acc = [];

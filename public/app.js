@@ -21,6 +21,22 @@ const DATA = { live: false, settings: {}, programme: null, speakers: null, spons
 
 const pick = obj => (obj && (obj[lang] || obj.en || Object.values(obj).find(Boolean))) || "";
 
+/* Quante giornate ha l'evento, e le loro date: tutto deriva dalle impostazioni,
+   così un'edizione di due o quattro giorni non richiede di toccare il codice. */
+const dayCount = () => Math.max(1, Math.min(14, Number(DATA.settings.event_days) || 3));
+const dayDate = n => new Date(EVENT_START.getTime() + (n - 1) * 86400e3);
+const dayLabel = n => `${T.prog.dayWord} ${n}`;
+const dayDateLabel = n => {
+  try {
+    return dayDate(n).toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" });
+  } catch { return ""; }
+};
+
+/* Tipi di sessione: elenco dalle impostazioni, etichette dalle traduzioni. */
+const tagCodes = () => String(DATA.settings.session_tags || "key,lab,soc,sym,free,ind,ws")
+  .split(",").map(s => s.trim()).filter(Boolean);
+const tagLabel = code => (T.prog.tag && T.prog.tag[code]) || code;
+
 function setPath(obj, path, value) {
   const ks = path.split(".");
   let o = obj;
@@ -80,17 +96,31 @@ function addonList() {
 }
 
 /* ---------------------------------------------------------------- LINGUA */
+/* Le lingue attive vengono dalle impostazioni; LANGS serve solo per le etichette
+   e come riserva se l'API non risponde. Così aggiungerne una è un'operazione da
+   backoffice: impostazione + traduzioni, senza toccare il codice. */
+function activeLangs() {
+  const fromSettings = String(DATA.settings.languages || "")
+    .split(",").map(s => s.trim()).filter(Boolean);
+  const codes = fromSettings.length ? fromSettings : LANGS.map(l => l.code);
+  return codes.map(code => {
+    const known = LANGS.find(l => l.code === code);
+    return known || { code, label: code.toUpperCase(), short: code.toUpperCase() };
+  });
+}
+
 function detectLang() {
+  const list = activeLangs();
   const q = new URLSearchParams(location.search).get("lang");
   const saved = (() => { try { return localStorage.getItem(STORE_KEY); } catch (e) { return null; } })();
   const nav = (navigator.language || "en").slice(0, 2).toLowerCase();
-  const has = c => LANGS.some(l => l.code === c);
-  return has(q) ? q : has(saved) ? saved : has(nav) ? nav : "en";
+  const has = c => list.some(l => l.code === c);
+  return has(q) ? q : has(saved) ? saved : has(nav) ? nav : list[0].code;
 }
 
 function buildLangMenu() {
   const menu = $("#langMenu");
-  menu.innerHTML = LANGS.map(l =>
+  menu.innerHTML = activeLangs().map(l =>
     `<button role="menuitem" data-lang="${l.code}"><span>${l.label}</span><span class="code">${l.short}</span></button>`
   ).join("");
   menu.addEventListener("click", e => {
@@ -101,11 +131,13 @@ function buildLangMenu() {
 
 function setLang(code) {
   lang = code;
-  T = I18N[code];
+  // Una lingua aggiunta solo dal backoffice non ha un blocco in i18n.js:
+  // si parte dall'inglese e le traduzioni dal database lo sovrascrivono.
+  T = I18N[code] || I18N.en;
   try { localStorage.setItem(STORE_KEY, code); } catch (e) {}
   document.documentElement.lang = code;
 
-  const cur = LANGS.find(l => l.code === code);
+  const cur = activeLangs().find(l => l.code === code) || { short: code.toUpperCase() };
   $("#langCur").textContent = cur.short;
   $$("#langMenu button").forEach(b => b.classList.toggle("is-on", b.dataset.lang === code));
 
@@ -119,9 +151,29 @@ function setLang(code) {
   renderFormOptions();
   renderSponsors();
   renderFaq();
+  renderStats();
   renderSummary();
   syncCta();
   tickCountdown();
+}
+
+/* Logo dell'evento: se nel backoffice è stato messo un URL o un SVG, sostituisce
+   il segno di default ovunque compaia il marchio. */
+function renderLogo() {
+  const marks = $$(".brand__mark");
+  if (!marks.length) return;
+  const fallback = marks[0].dataset.default || marks[0].outerHTML;
+  marks.forEach(m => { if (!m.dataset.default) m.dataset.default = m.outerHTML; });
+
+  const html = logoHtml(DATA.settings, { fallback: "", alt: T.meta.title });
+  if (!html) return;
+  marks.forEach(m => {
+    const box = document.createElement("span");
+    box.className = "brand__mark";
+    box.dataset.default = m.dataset.default || fallback;
+    box.innerHTML = html;
+    m.replaceWith(box);
+  });
 }
 
 /* Il pulsante del riepilogo cambia etichetta all'ultimo step: dopo un cambio
@@ -164,35 +216,62 @@ function tickCountdown() {
 
 /* --------------------------------------------------------------- TICKER */
 function renderTicker() {
-  const items = T.ticker.map(t => `<span>${t}</span>`).join("");
+  // Una sola stringa con le voci separate da "|", così è modificabile dal backoffice.
+  const list = String(T.ticker?.items || "").split("|").map(s => s.trim()).filter(Boolean);
+  const items = list.map(t => `<span>${t}</span>`).join("");
   $("#ticker").innerHTML = items + items; // duplicato per il loop continuo
 }
 
 /* ------------------------------------------------------------ PROGRAMME */
-const TAGMAP = { key:"tagKey", lab:"tagLab", soc:"tagSoc", sym:"tagSym", free:"tagFree", ind:"tagInd", ws:"tagWs" };
-
 function renderProgramme() {
-  const active = $(".tab.is-on")?.dataset.day || "1";
-  $("#panels").innerHTML = [1, 2, 3].map(d => {
+  const days = dayCount();
+  const active = Math.min(Number($(".tab.is-on")?.dataset.day) || 1, days);
+
+  $("#tabs").innerHTML = Array.from({ length: days }, (_, i) => i + 1).map(d =>
+    `<button class="tab ${d === active ? "is-on" : ""}" role="tab" data-day="${d}">
+       <b>${dayLabel(d)}</b><small>${dayDateLabel(d)}</small>
+     </button>`).join("");
+
+  $("#panels").innerHTML = Array.from({ length: days }, (_, i) => i + 1).map(d => {
     const slots = DATA.programme
       ? (DATA.programme[d] || []).map(s => ({ t: s.t, tag: s.tag, h: pick(s.h), p: pick(s.p) }))
       : (T.prog["day" + d] || []);
-    return `<div class="panel ${String(d) === active ? "is-on" : ""}" data-panel-day="${d}">` +
-      slots.map(s => `
+    return `<div class="panel ${d === active ? "is-on" : ""}" data-panel-day="${d}">` +
+      (slots.length ? slots.map(s => `
         <div class="slot">
           <div class="slot__t">${s.t}</div>
           <div><h4>${s.h}</h4><p>${s.p}</p></div>
-          ${s.tag ? `<span class="slot__tag ${s.tag === "key" ? "slot__tag--key" : ""}">${T.prog[TAGMAP[s.tag]] || ""}</span>` : "<span></span>"}
-        </div>`).join("") + `</div>`;
+          ${s.tag ? `<span class="slot__tag ${s.tag === "key" ? "slot__tag--key" : ""}">${tagLabel(s.tag)}</span>` : "<span></span>"}
+        </div>`).join("") : `<p class="small" style="padding:24px 0">—</p>`) + `</div>`;
   }).join("");
-}
 
-function initTabs() {
   $$(".tab").forEach(tab => tab.addEventListener("click", () => {
     $$(".tab").forEach(t => t.classList.remove("is-on"));
     tab.classList.add("is-on");
     $$(".panel").forEach(p => p.classList.toggle("is-on", p.dataset.panelDay === tab.dataset.day));
   }));
+}
+
+/* I numeri della sezione statistiche: i segnaposto {days}, {sessions} e {months}
+   si calcolano dai dati, così non invecchiano. */
+function renderStats() {
+  const sessions = DATA.programme
+    ? Object.values(DATA.programme).reduce((n, a) => n + a.length, 0)
+    : [1, 2, 3].reduce((n, d) => n + (T.prog["day" + d] || []).length, 0);
+
+  const target = DATA.settings.stat_target_date;
+  let months = 0;
+  if (target) {
+    const d = new Date(target);
+    if (!isNaN(d)) months = Math.max(0, Math.round((d - EVENT_START) / (30.44 * 86400e3)));
+  }
+
+  const subs = { days: dayCount(), sessions: sessions >= 20 ? "20+" : String(sessions), months };
+  $$("[data-stat]").forEach(el => {
+    const raw = T.stats[el.dataset.stat] || "";
+    el.innerHTML = raw.replace(/\{(\w+)\}/g, (m, k) => (k in subs ? subs[k] : m))
+      .replace(/\+/g, "<em>+</em>");
+  });
 }
 
 /* ------------------------------------------------------------- SPEAKERS */
@@ -204,7 +283,7 @@ function renderSpeakers() {
 
   $("#spkGrid").innerHTML = list.map(s => `
     <article class="spk">
-      <div class="spk__ph"${s.name ? ` data-named="1"` : ""}>${
+      <div class="spk__ph"${s.name ? "" : ` data-tba="${T.spk.tba}"`}>${
         s.photo ? `<img src="${s.photo}" alt="${s.name || ""}" loading="lazy" style="width:100%;height:100%;object-fit:cover">` : ph
       }</div>
       <div class="spk__b">
@@ -233,9 +312,14 @@ function renderSponsors() {
 
 /* ----------------------------------------------------------------- FAQ */
 function renderFaq() {
-  const n = 7;
-  $("#acc").innerHTML = Array.from({ length: n }, (_, i) => {
-    const q = T.faq["q" + (i + 1)], a = T.faq["a" + (i + 1)];
+  // Conta le domande effettivamente presenti: aggiungerne una in traduzioni basta.
+  const items = [];
+  for (let i = 1; i <= 50; i++) {
+    const q = T.faq["q" + i], a = T.faq["a" + i];
+    if (!q || !a) break;
+    items.push([q, a]);
+  }
+  $("#acc").innerHTML = items.map(([q, a]) => {
     return `<div class="acc__i">
       <button class="acc__q" aria-expanded="false"><span>${q}</span><span class="pm"></span></button>
       <div class="acc__a"><p>${a}</p></div>
@@ -315,7 +399,11 @@ function renderPayMethods() {
 function renderFormOptions() {
   const role = $("#role"), country = $("#country");
   const rv = role.value, cv = country.value;
-  role.innerHTML = `<option value="">${T.reg.f.rolePick}</option>` + T.reg.f.roles.map((r, i) => `<option value="r${i}">${r}</option>`).join("");
+  // I codici r0…rN sono stabili: nel database finisce il codice, non l'etichetta.
+  const roles = Object.entries(T.reg.roles || {}).sort((a, b) =>
+    Number(a[0].slice(1)) - Number(b[0].slice(1)));
+  role.innerHTML = `<option value="">${T.reg.f.rolePick}</option>` +
+    roles.map(([code, label]) => `<option value="${code}">${label}</option>`).join("");
   country.innerHTML = `<option value="">${T.reg.f.countryPick}</option>` + COUNTRIES.map(c => `<option value="${c}">${c}</option>`).join("");
   role.value = rv; country.value = cv;
 }
@@ -402,7 +490,7 @@ async function completeBooking() {
     last_name:  $("#ln").value.trim(),
     email:      $("#em").value.trim(),
     org:        $("#org").value.trim(),
-    role:       $("#role").selectedOptions[0]?.textContent || null,
+    role:       $("#role").value || null,   // codice stabile, non l'etichetta tradotta
     country:    $("#country").value || null,
     vat:        $("#vat").value.trim() || null,
     diet:       $("#diet").value.trim() || null,
@@ -460,16 +548,25 @@ function toast(msg) {
 function downloadIcs() {
   const pad = n => String(n).padStart(2, "0");
   const fmt = d => d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) + "T" + pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + "00Z";
-  const end = new Date("2027-04-10T18:00:00+02:00");
+  const esc = s => String(s).replace(/[\\;,]/g, m => "\\" + m).replace(/\n/g, "\\n");
+
+  // Fine e sede dalle impostazioni; in mancanza, l'ultimo giorno alle 18.
+  let end = new Date(DATA.settings.event_end || "");
+  if (isNaN(end)) {
+    end = dayDate(dayCount());
+    end.setHours(18, 0, 0, 0);
+  }
+  const place = DATA.settings.venue_name || T.venue.v1 || "";
+
   const ics = [
     "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//EEBA 2027//EN", "BEGIN:VEVENT",
     "UID:eeba2027@eeba.eu",
     "DTSTAMP:" + fmt(new Date()),
     "DTSTART:" + fmt(EVENT_START),
     "DTEND:" + fmt(end),
-    "SUMMARY:EEBA 2027 — XXXVIII Annual Meeting",
-    "LOCATION:University Hall, Naamsestraat 22, 3000 Leuven, Belgium",
-    "DESCRIPTION:" + T.meta.desc.replace(/,/g, "\\,"),
+    "SUMMARY:" + esc(T.meta.title.split("—")[0].trim() + " — " + T.hero.city),
+    "LOCATION:" + esc(place),
+    "DESCRIPTION:" + esc(T.meta.desc),
     "END:VEVENT", "END:VCALENDAR"
   ].join("\r\n");
 
@@ -517,6 +614,7 @@ function initTheme() {
     const next = currentTheme() === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = next;
     try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+    applyTheme(DATA.settings);   // chiaro e scuro hanno accenti diversi
   });
 
   // Se l'utente non ha mai scelto, si resta agganciati alle impostazioni di sistema.
@@ -524,6 +622,7 @@ function initTheme() {
     let saved = null;
     try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
     if (!saved) delete document.documentElement.dataset.theme;
+    applyTheme(DATA.settings);
   });
 }
 
@@ -563,6 +662,9 @@ async function init() {
   $("#icsBtn").addEventListener("click", downloadIcs);
 
   await hydrate();
+  applyTheme(DATA.settings);
+  renderLogo();
+  buildLangMenu();          // le lingue attive si conoscono solo dopo l'idratazione
   setLang(detectLang());
   initReveal();
   initScrollSpy();

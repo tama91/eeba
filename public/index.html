@@ -120,10 +120,11 @@
 
 <!-- ============================ STATS ============================ -->
 <div class="stats">
-  <div><b>3</b><p><b style="font-size:inherit;display:inline" data-i18n="stats.a">Days</b> — <span data-i18n="stats.ad"></span></p></div>
-  <div><b>30<em>+</em></b><p><b style="font-size:inherit;display:inline" data-i18n="stats.b">Countries</b> — <span data-i18n="stats.bd"></span></p></div>
-  <div><b>20<em>+</em></b><p><b style="font-size:inherit;display:inline" data-i18n="stats.c">Sessions</b> — <span data-i18n="stats.cd"></span></p></div>
-  <div><b>4</b><p><b style="font-size:inherit;display:inline" data-i18n="stats.d">Months</b> — <span data-i18n="stats.dd"></span></p></div>
+  <!-- i valori accettano i segnaposto {days} {sessions} {months}, calcolati dai dati -->
+  <div><b data-stat="av">—</b><p><b style="font-size:inherit;display:inline" data-i18n="stats.a">Days</b> — <span data-i18n="stats.ad"></span></p></div>
+  <div><b data-stat="bv">—</b><p><b style="font-size:inherit;display:inline" data-i18n="stats.b">Countries</b> — <span data-i18n="stats.bd"></span></p></div>
+  <div><b data-stat="cv">—</b><p><b style="font-size:inherit;display:inline" data-i18n="stats.c">Sessions</b> — <span data-i18n="stats.cd"></span></p></div>
+  <div><b data-stat="dv">—</b><p><b style="font-size:inherit;display:inline" data-i18n="stats.d">Months</b> — <span data-i18n="stats.dd"></span></p></div>
 </div>
 
 <!-- ============================ ABOUT ============================ -->
@@ -194,11 +195,9 @@
       <div class="col-7" style="align-self:end"><p class="lead" style="margin:0" data-i18n="prog.lead"></p></div>
     </div>
 
-    <div class="tabs" role="tablist">
-      <button class="tab is-on" role="tab" data-day="1"><b data-i18n="prog.d1">Day 1</b><small data-i18n="prog.d1d"></small></button>
-      <button class="tab" role="tab" data-day="2"><b data-i18n="prog.d2">Day 2</b><small data-i18n="prog.d2d"></small></button>
-      <button class="tab" role="tab" data-day="3"><b data-i18n="prog.d3">Day 3</b><small data-i18n="prog.d3d"></small></button>
-    </div>
+    <!-- schede e pannelli generati da app.js: il numero di giornate viene
+         dalle impostazioni, le date si calcolano dalla data di inizio -->
+    <div class="tabs" role="tablist" id="tabs"></div>
     <div id="panels"></div>
   </div>
 </section>
@@ -505,6 +504,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="theme.js"></script>
 <script src="i18n.js"></script>
 <script src="app.js"></script>
 </body>

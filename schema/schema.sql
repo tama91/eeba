@@ -59,7 +59,7 @@ CREATE INDEX IF NOT EXISTS idx_sponsors_sort ON sponsors(tier, sort);
 
 CREATE TABLE IF NOT EXISTS programme_slots (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  day_no     INTEGER NOT NULL CHECK (day_no BETWEEN 1 AND 3),
+  day_no     INTEGER NOT NULL CHECK (day_no BETWEEN 1 AND 14),
   time       TEXT    NOT NULL DEFAULT '09:00',
   tag        TEXT,                            -- key|lab|soc|sym|free|ind|ws
   title_json TEXT    NOT NULL DEFAULT '{}',

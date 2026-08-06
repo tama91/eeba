@@ -296,9 +296,12 @@ body.menu-open .burger span::after{ top:0; transform:rotate(-45deg); }
   display:grid; place-items:center; position:relative;
 }
 .spk__ph svg{ width:52px; opacity:.28; }
-.spk__ph::after{
-  content:"TBA"; position:absolute; bottom:12px; left:12px;
+/* Il segnaposto compare solo sui relatori non ancora annunciati, e il testo
+   arriva dalle traduzioni: niente "TBA" fisso in inglese. */
+.spk__ph[data-tba]::after{
+  content:attr(data-tba); position:absolute; bottom:12px; left:12px;
   font-family:var(--mono); font-size:9.5px; letter-spacing:.14em; color:var(--ink-25);
+  text-transform:uppercase;
 }
 .spk__b{ padding:18px 20px 22px; }
 .spk__b h4{ margin:0 0 4px; }

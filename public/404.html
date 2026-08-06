@@ -40,12 +40,38 @@
       <circle cx="16" cy="16" r="10" fill="none" stroke="#0057D9" stroke-width="1.4"/>
       <circle cx="16" cy="16" r="4.6" fill="#0057D9"/>
     </svg>
-    <div class="code">Error 404</div>
-    <h1>This page is <em>not here</em>.</h1>
-    <p>The address may be mistyped, or the page may have moved since it was linked.</p>
-    <a class="btn" href="/">Back to EEBA 2027 →</a>
+    <div class="code" id="code">Error 404</div>
+    <h1 id="title">This page is <em>not here</em>.</h1>
+    <p id="body">The address may be mistyped, or the page may have moved since it was linked.</p>
+    <a class="btn" href="/" id="back">Back to EEBA 2027 →</a>
     <div class="path" id="path"></div>
   </div>
-  <script>document.getElementById("path").textContent = location.pathname;</script>
+  <script>
+  /* Pagina statica servita da Cloudflare: le traduzioni stanno qui, non
+     nel database, perché deve funzionare anche se l'API è irraggiungibile. */
+  var L = {
+    en: { code:"Error 404", t:"This page is <em>not here</em>.",
+          b:"The address may be mistyped, or the page may have moved since it was linked.",
+          back:"Back to EEBA 2027 →" },
+    it: { code:"Errore 404", t:"Questa pagina <em>non c'è</em>.",
+          b:"L'indirizzo potrebbe essere scritto male, oppure la pagina è stata spostata.",
+          back:"Torna a EEBA 2027 →" },
+    nl: { code:"Fout 404", t:"Deze pagina <em>bestaat niet</em>.",
+          b:"Het adres klopt mogelijk niet, of de pagina is verplaatst sinds de link is gemaakt.",
+          back:"Terug naar EEBA 2027 →" },
+    fr: { code:"Erreur 404", t:"Cette page <em>n'existe pas</em>.",
+          b:"L'adresse est peut-être mal saisie, ou la page a été déplacée depuis.",
+          back:"Retour à EEBA 2027 →" }
+  };
+  var code = "en";
+  try { code = localStorage.getItem("eeba27.lang") || (navigator.language || "en").slice(0,2).toLowerCase(); } catch(e){}
+  var t = L[code] || L.en;
+  document.documentElement.lang = L[code] ? code : "en";
+  document.getElementById("code").textContent = t.code;
+  document.getElementById("title").innerHTML = t.t;
+  document.getElementById("body").textContent = t.b;
+  document.getElementById("back").textContent = t.back;
+  document.getElementById("path").textContent = location.pathname;
+  </script>
 </body>
 </html>

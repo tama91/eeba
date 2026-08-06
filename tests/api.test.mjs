@@ -317,6 +317,104 @@ group("Impostazioni e registro attività");
     !JSON.stringify(r.data.results).includes("passwordLunga12"));
 }
 
+group("Capienza delle tariffe");
+{
+  const saved = cookie;
+  DB._raw.exec("UPDATE tiers SET capacity = 1 WHERE code = 'ind'");
+  const base = { first_name:"T", last_name:"T", email:"t1@t.it", org:"O", tier_code:"ind",
+                 consent_terms:true, consent_gdpr:true };
+  let r = await call("/public/register", { method:"POST", body: base, useCookie:false });
+  check("primo posto sulla tariffa assegnato", r.status === 201, r.status);
+  r = await call("/public/register", { method:"POST", body:{ ...base, email:"t2@t.it" }, useCookie:false });
+  check("tariffa esaurita → 409", r.status === 409 && r.data.soldOut === "ind", JSON.stringify(r.data));
+  r = await call("/public/register", { method:"POST", body:{ ...base, email:"t3@t.it", tier_code:"tra" }, useCookie:false });
+  check("le altre tariffe restano aperte", r.status === 201, r.status);
+  DB._raw.exec("UPDATE tiers SET capacity = NULL WHERE code = 'ind'");
+  cookie = saved;
+}
+
+group("Validazione delle impostazioni");
+{
+  const cases = [
+    ["event_days", "3",    200, "3 giornate accettate"],
+    ["event_days", "0",    400, "zero giornate rifiutate"],
+    ["event_days", "99",   400, "99 giornate rifiutate"],
+    ["event_days", "tre",  400, "testo al posto del numero rifiutato"],
+    ["theme_accent", "#0057D9", 200, "colore esadecimale accettato"],
+    ["theme_accent", "",   200, "accento vuoto accettato (torna al preset)"],
+    ["theme_accent", "rosso", 400, "nome di colore rifiutato"],
+    ["logo_url", "https://x.test/l.svg", 200, "URL https accettato"],
+    ["logo_url", "http://x.test/l.svg",  400, "URL non cifrato rifiutato"],
+    ["languages", "en,it,de", 200, "elenco lingue valido"],
+    ["languages", "inglese",  400, "elenco lingue non valido rifiutato"],
+    ["registration_open", "2", 400, "valore booleano fuori range rifiutato"],
+    ["stat_target_date", "01/08/2027", 400, "data in formato sbagliato rifiutata"]
+  ];
+  for (const [k, v, expect, name] of cases) {
+    const r = await call("/admin/settings", { method: "PATCH", body: { [k]: v } });
+    check(name, r.status === expect, `atteso ${expect}, ottenuto ${r.status}`);
+  }
+  const r = await call("/admin/settings", { method: "PATCH", body: { theme_accent: "0057D9" } });
+  const row = DB._raw.prepare("SELECT svalue FROM settings WHERE skey='theme_accent'").get();
+  check("il cancelletto viene aggiunto da solo", r.status === 200 && row.svalue === "#0057d9", row.svalue);
+}
+
+group("Sanificazione del logo SVG");
+{
+  const attacks = [
+    ['<svg onload="alert(1)"><circle r="4"/></svg>', "onload", "attributo onload rimosso"],
+    ['<svg><script>alert(1)</script><circle r="4"/></svg>', "<script", "tag script rimosso"],
+    ['<svg><a href="javascript:alert(1)">x</a></svg>', "javascript:", "href javascript neutralizzato"],
+    ['<svg><foreignObject><body onclick="x"/></foreignObject></svg>', "foreignObject", "foreignObject rimosso"]
+  ];
+  for (const [payload, needle, name] of attacks) {
+    await call("/admin/settings", { method: "PATCH", body: { logo_svg: payload } });
+    const row = DB._raw.prepare("SELECT svalue FROM settings WHERE skey='logo_svg'").get();
+    check(name, !String(row.svalue).toLowerCase().includes(needle.toLowerCase()), row.svalue);
+  }
+  let r = await call("/admin/settings", { method: "PATCH", body: { logo_svg: "<div>non è un svg</div>" } });
+  check("markup che non è un SVG viene rifiutato", r.status === 400, r.status);
+  r = await call("/admin/settings", { method: "PATCH", body: { logo_svg: "<svg>" + "x".repeat(70000) + "</svg>" } });
+  check("SVG enorme rifiutato", r.status === 400, r.status);
+  r = await call("/admin/settings", { method: "PATCH", body: { logo_svg: '<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="8" fill="currentColor"/></svg>' } });
+  check("un SVG pulito passa intatto", r.status === 200, r.status);
+  await call("/admin/settings", { method: "PATCH", body: { logo_svg: "" } });
+}
+
+group("L'export CSV rispetta i filtri");
+{
+  const all = await call("/admin/registrations/export.csv");
+  const paid = await call("/admin/registrations/export.csv?status=paid");
+  const rows = s => String(s).trim().split("\r\n").length - 1;
+  check("export completo con più righe", rows(all.data) > rows(paid.data),
+        `tutte:${rows(all.data)} pagate:${rows(paid.data)}`);
+  const q = await call("/admin/registrations/export.csv?q=Rossi");
+  check("export filtrato per ricerca", rows(q.data) === 1, rows(q.data));
+  check("l'export filtrato contiene la riga giusta", String(q.data).includes("anna@ospedale.it"));
+}
+
+group("Giornate del programma oltre le tre");
+{
+  await call("/admin/settings", { method: "PATCH", body: { event_days: "5" } });
+  let r = await call("/admin/programme", { method: "POST", body: {
+    day_no: 5, time: "10:00", title_json: { it: "Quinta giornata" }, published: 1 } });
+  check("una sessione al giorno 5 viene accettata", r.status === 201, JSON.stringify(r.data));
+  r = await call("/public/content", { useCookie: false });
+  check("il giorno 5 arriva al sito pubblico", (r.data.programme[5] || []).length === 1,
+        JSON.stringify(Object.keys(r.data.programme)));
+  await call("/admin/settings", { method: "PATCH", body: { event_days: "3" } });
+}
+
+group("Il ruolo viaggia come codice, non come etichetta");
+{
+  const r = await call("/public/register", { method: "POST", useCookie: false, body: {
+    first_name:"Jan", last_name:"Peeters", email:"jan@uz.be", org:"UZ Leuven",
+    role:"r2", country:"Belgium", tier_code:"tra", consent_terms:true, consent_gdpr:true, lang:"nl" } });
+  check("iscrizione con codice ruolo", r.status === 201, JSON.stringify(r.data));
+  const row = DB._raw.prepare("SELECT role FROM registrations WHERE email='jan@uz.be'").get();
+  check("nel database c'è il codice, non il testo tradotto", row.role === "r2", row.role);
+}
+
 group("Cambio password e chiusura sessione");
 {
   let r = await call("/auth/password", { method: "POST", body: { current: "sbagliata", next: "nuovaPasswordOk1" } });

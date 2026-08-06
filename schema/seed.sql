@@ -1,7 +1,7 @@
 -- ==========================================================================
 -- EEBA 2027 — seed generato automaticamente da i18n.js
 -- NON modificare a mano: rigenera con  node schema/generate-seed.js
--- Applicare con:  npx wrangler d1 execute eeba --file=schema/seed.sql --remote
+-- Applicare con:  npm run db:seed   (npx wrangler d1 execute eeba-2027 --file=schema/seed.sql --remote)
 -- ==========================================================================
 
 DELETE FROM settings;
@@ -13,6 +13,13 @@ INSERT INTO settings (skey, svalue) VALUES ('venue_name', 'University Hall, Leuv
 INSERT INTO settings (skey, svalue) VALUES ('venue_maps', 'https://maps.app.goo.gl/1JEywDNpTEGTMjMs8');
 INSERT INTO settings (skey, svalue) VALUES ('languages', 'en,it,nl,fr');
 INSERT INTO settings (skey, svalue) VALUES ('registration_open', '1');
+INSERT INTO settings (skey, svalue) VALUES ('event_days', '3');
+INSERT INTO settings (skey, svalue) VALUES ('session_tags', 'key,lab,soc,sym,free,ind,ws');
+INSERT INTO settings (skey, svalue) VALUES ('stat_target_date', '2027-08-01');
+INSERT INTO settings (skey, svalue) VALUES ('theme_preset', 'clinical-blue');
+INSERT INTO settings (skey, svalue) VALUES ('theme_accent', '');
+INSERT INTO settings (skey, svalue) VALUES ('logo_url', '');
+INSERT INTO settings (skey, svalue) VALUES ('logo_svg', '');
 
 DELETE FROM tiers;
 INSERT INTO tiers (code, early_price, late_price, name_json, desc_json, sort, active) VALUES ('mem', 52000, 62000, '{"en":"EEBA Member","it":"Socio EEBA","nl":"EEBA-lid","fr":"Membre EEBA"}', '{"en":"Individual or institutional member in good standing","it":"Socio individuale o istituzionale in regola","nl":"Individueel of institutioneel lid in goede standing","fr":"Membre individuel ou institutionnel à jour de cotisation"}', 0, 1);
@@ -100,6 +107,7 @@ INSERT INTO translations (tkey, value_json) VALUES ('count.h', '{"en":"Hours","i
 INSERT INTO translations (tkey, value_json) VALUES ('count.m', '{"en":"Min","it":"Min","nl":"Min","fr":"Min"}');
 INSERT INTO translations (tkey, value_json) VALUES ('count.s', '{"en":"Sec","it":"Sec","nl":"Sec","fr":"Sec"}');
 INSERT INTO translations (tkey, value_json) VALUES ('count.over', '{"en":"The meeting has begun","it":"Il congresso è iniziato","nl":"De vergadering is begonnen","fr":"Le congrès a commencé"}');
+INSERT INTO translations (tkey, value_json) VALUES ('ticker.items', '{"en":"XXXVIII EEBA Annual Meeting|University Hall · Leuven|Symposia · Workshops · Wetlabs|EU SoHO Regulation readiness|Abstract deadline 15 Dec 2026|Early bird until 15 Jan 2027|In collaboration with KU Leuven","it":"XXXVIII Congresso EEBA|University Hall · Lovanio|Simposi · Workshop · Wetlab|Pronti per il Regolamento SoHO|Abstract entro il 15 dic 2026|Early bird fino al 15 gen 2027|In collaborazione con KU Leuven","nl":"XXXVIIIe EEBA Jaarvergadering|Universiteitshal · Leuven|Symposia · Workshops · Wetlabs|Klaar voor de SoHO-verordening|Abstracts tot 15 dec 2026|Early bird tot 15 jan 2027|In samenwerking met KU Leuven","fr":"XXXVIIIe Congrès EEBA|Halle universitaire · Louvain|Symposiums · Ateliers · Wetlabs|Prêts pour le règlement SoHO|Résumés avant le 15 déc. 2026|Early bird jusqu''au 15 janv. 2027|En collaboration avec la KU Leuven"}');
 INSERT INTO translations (tkey, value_json) VALUES ('about.eye', '{"en":"About the meeting","it":"Il congresso","nl":"Over de vergadering","fr":"Le congrès"}');
 INSERT INTO translations (tkey, value_json) VALUES ('about.n', '{"en":"01","it":"01","nl":"01","fr":"01"}');
 INSERT INTO translations (tkey, value_json) VALUES ('about.t1', '{"en":"A working meeting,","it":"Un congresso di lavoro,","nl":"Een werkvergadering,","fr":"Un congrès de travail,"}');
@@ -115,6 +123,10 @@ INSERT INTO translations (tkey, value_json) VALUES ('about.c3t', '{"en":"Regulat
 INSERT INTO translations (tkey, value_json) VALUES ('about.c3d', '{"en":"Compliance hurdles, final technical guidelines and ''day one'' readiness under SoHO.","it":"Ostacoli di conformità, linee guida tecniche definitive e prontezza al ''giorno uno'' SoHO.","nl":"Nalevingsdrempels, definitieve technische richtlijnen en ''dag één''-gereedheid onder SoHO.","fr":"Obstacles de conformité, lignes directrices techniques finales et préparation au « jour un » SoHO."}');
 INSERT INTO translations (tkey, value_json) VALUES ('about.c4t', '{"en":"Peer network","it":"Rete di colleghi","nl":"Collegiaal netwerk","fr":"Réseau de pairs"}');
 INSERT INTO translations (tkey, value_json) VALUES ('about.c4d', '{"en":"Eye bankers, clinicians, researchers and industry partners from across Europe and beyond.","it":"Eye banker, clinici, ricercatori e partner industriali da tutta Europa e oltre.","nl":"Oogbankmedewerkers, clinici, onderzoekers en industriepartners uit heel Europa en daarbuiten.","fr":"Professionnels des banques d''yeux, cliniciens, chercheurs et partenaires industriels de toute l''Europe et au-delà."}');
+INSERT INTO translations (tkey, value_json) VALUES ('stats.av', '{"en":"{days}","it":"{days}","nl":"{days}","fr":"{days}"}');
+INSERT INTO translations (tkey, value_json) VALUES ('stats.bv', '{"en":"30+","it":"30+","nl":"30+","fr":"30+"}');
+INSERT INTO translations (tkey, value_json) VALUES ('stats.cv', '{"en":"{sessions}","it":"{sessions}","nl":"{sessions}","fr":"{sessions}"}');
+INSERT INTO translations (tkey, value_json) VALUES ('stats.dv', '{"en":"{months}","it":"{months}","nl":"{months}","fr":"{months}"}');
 INSERT INTO translations (tkey, value_json) VALUES ('stats.a', '{"en":"Days","it":"Giorni","nl":"Dagen","fr":"Jours"}');
 INSERT INTO translations (tkey, value_json) VALUES ('stats.ad', '{"en":"of programme, 8–10 April 2027","it":"di programma, 8–10 aprile 2027","nl":"programma, 8–10 april 2027","fr":"de programme, 8–10 avril 2027"}');
 INSERT INTO translations (tkey, value_json) VALUES ('stats.b', '{"en":"Countries","it":"Paesi","nl":"Landen","fr":"Pays"}');
@@ -140,19 +152,14 @@ INSERT INTO translations (tkey, value_json) VALUES ('prog.n', '{"en":"03","it":"
 INSERT INTO translations (tkey, value_json) VALUES ('prog.t1', '{"en":"Three days,","it":"Tre giorni,","nl":"Drie dagen,","fr":"Trois jours,"}');
 INSERT INTO translations (tkey, value_json) VALUES ('prog.t2', '{"en":"one working agenda.","it":"un''unica agenda di lavoro.","nl":"één werkagenda.","fr":"un seul ordre du jour."}');
 INSERT INTO translations (tkey, value_json) VALUES ('prog.lead', '{"en":"Provisional structure. The detailed scientific programme is published as sessions are confirmed by the Organising Committee.","it":"Struttura provvisoria. Il programma scientifico dettagliato viene pubblicato man mano che le sessioni sono confermate dal Comitato Organizzatore.","nl":"Voorlopige structuur. Het gedetailleerde wetenschappelijke programma wordt gepubliceerd zodra sessies door het organiserend comité zijn bevestigd.","fr":"Structure provisoire. Le programme scientifique détaillé est publié au fur et à mesure que les sessions sont confirmées par le comité d''organisation."}');
-INSERT INTO translations (tkey, value_json) VALUES ('prog.d1', '{"en":"Day 1","it":"Giorno 1","nl":"Dag 1","fr":"Jour 1"}');
-INSERT INTO translations (tkey, value_json) VALUES ('prog.d1d', '{"en":"Thu 8 April","it":"Gio 8 aprile","nl":"Do 8 april","fr":"Jeu. 8 avril"}');
-INSERT INTO translations (tkey, value_json) VALUES ('prog.d2', '{"en":"Day 2","it":"Giorno 2","nl":"Dag 2","fr":"Jour 2"}');
-INSERT INTO translations (tkey, value_json) VALUES ('prog.d2d', '{"en":"Fri 9 April","it":"Ven 9 aprile","nl":"Vr 9 april","fr":"Ven. 9 avril"}');
-INSERT INTO translations (tkey, value_json) VALUES ('prog.d3', '{"en":"Day 3","it":"Giorno 3","nl":"Dag 3","fr":"Jour 3"}');
-INSERT INTO translations (tkey, value_json) VALUES ('prog.d3d', '{"en":"Sat 10 April","it":"Sab 10 aprile","nl":"Za 10 april","fr":"Sam. 10 avril"}');
-INSERT INTO translations (tkey, value_json) VALUES ('prog.tagKey', '{"en":"Keynote","it":"Lettura","nl":"Keynote","fr":"Plénière"}');
-INSERT INTO translations (tkey, value_json) VALUES ('prog.tagLab', '{"en":"Wetlab","it":"Wetlab","nl":"Wetlab","fr":"Wetlab"}');
-INSERT INTO translations (tkey, value_json) VALUES ('prog.tagSoc', '{"en":"Social","it":"Sociale","nl":"Sociaal","fr":"Social"}');
-INSERT INTO translations (tkey, value_json) VALUES ('prog.tagSym', '{"en":"Symposium","it":"Simposio","nl":"Symposium","fr":"Symposium"}');
-INSERT INTO translations (tkey, value_json) VALUES ('prog.tagFree', '{"en":"Free papers","it":"Comunicazioni","nl":"Vrije voordracht","fr":"Communications"}');
-INSERT INTO translations (tkey, value_json) VALUES ('prog.tagInd', '{"en":"Industry","it":"Industria","nl":"Industrie","fr":"Industrie"}');
-INSERT INTO translations (tkey, value_json) VALUES ('prog.tagWs', '{"en":"Workshop","it":"Workshop","nl":"Workshop","fr":"Atelier"}');
+INSERT INTO translations (tkey, value_json) VALUES ('prog.dayWord', '{"en":"Day","it":"Giorno","nl":"Dag","fr":"Jour"}');
+INSERT INTO translations (tkey, value_json) VALUES ('prog.tag.key', '{"en":"Keynote","it":"Lettura","nl":"Keynote","fr":"Plénière"}');
+INSERT INTO translations (tkey, value_json) VALUES ('prog.tag.lab', '{"en":"Wetlab","it":"Wetlab","nl":"Wetlab","fr":"Wetlab"}');
+INSERT INTO translations (tkey, value_json) VALUES ('prog.tag.soc', '{"en":"Social","it":"Sociale","nl":"Sociaal","fr":"Social"}');
+INSERT INTO translations (tkey, value_json) VALUES ('prog.tag.sym', '{"en":"Symposium","it":"Simposio","nl":"Symposium","fr":"Symposium"}');
+INSERT INTO translations (tkey, value_json) VALUES ('prog.tag.free', '{"en":"Free papers","it":"Comunicazioni","nl":"Vrije voordracht","fr":"Communications"}');
+INSERT INTO translations (tkey, value_json) VALUES ('prog.tag.ind', '{"en":"Industry","it":"Industria","nl":"Industrie","fr":"Industrie"}');
+INSERT INTO translations (tkey, value_json) VALUES ('prog.tag.ws', '{"en":"Workshop","it":"Workshop","nl":"Workshop","fr":"Atelier"}');
 INSERT INTO translations (tkey, value_json) VALUES ('spk.eye', '{"en":"Speakers","it":"Relatori","nl":"Sprekers","fr":"Intervenants"}');
 INSERT INTO translations (tkey, value_json) VALUES ('spk.n', '{"en":"04","it":"04","nl":"04","fr":"04"}');
 INSERT INTO translations (tkey, value_json) VALUES ('spk.t1', '{"en":"Faculty","it":"Faculty","nl":"Faculty","fr":"Faculty"}');
@@ -162,6 +169,7 @@ INSERT INTO translations (tkey, value_json) VALUES ('spk.r1', '{"en":"Keynote le
 INSERT INTO translations (tkey, value_json) VALUES ('spk.r2', '{"en":"Symposium chair","it":"Moderatore di simposio","nl":"Symposiumvoorzitter","fr":"Présidence de symposium"}');
 INSERT INTO translations (tkey, value_json) VALUES ('spk.r3', '{"en":"Regulatory session","it":"Sessione normativa","nl":"Sessie regelgeving","fr":"Session réglementaire"}');
 INSERT INTO translations (tkey, value_json) VALUES ('spk.r4', '{"en":"Wetlab faculty","it":"Faculty wetlab","nl":"Wetlab faculty","fr":"Faculty wetlab"}');
+INSERT INTO translations (tkey, value_json) VALUES ('spk.tba', '{"en":"TBA","it":"Da definire","nl":"Nog te bepalen","fr":"À définir"}');
 INSERT INTO translations (tkey, value_json) VALUES ('spk.note', '{"en":"Are you interested in contributing to the scientific programme? Submit an abstract or contact the Secretariat.","it":"Vuoi contribuire al programma scientifico? Invia un abstract o contatta la Segreteria.","nl":"Wilt u bijdragen aan het wetenschappelijk programma? Dien een abstract in of neem contact op met het secretariaat.","fr":"Vous souhaitez contribuer au programme scientifique ? Soumettez un résumé ou contactez le secrétariat."}');
 INSERT INTO translations (tkey, value_json) VALUES ('venue.eye', '{"en":"Venue & travel","it":"Sede e viaggio","nl":"Locatie & reizen","fr":"Lieu et voyage"}');
 INSERT INTO translations (tkey, value_json) VALUES ('venue.n', '{"en":"05","it":"05","nl":"05","fr":"05"}');
@@ -207,6 +215,14 @@ INSERT INTO translations (tkey, value_json) VALUES ('reg.f.diet', '{"en":"Dietar
 INSERT INTO translations (tkey, value_json) VALUES ('reg.f.dietHint', '{"en":"Optional — allergies, vegetarian, vegan, other","it":"Facoltativo — allergie, vegetariano, vegano, altro","nl":"Optioneel — allergieën, vegetarisch, veganistisch, anders","fr":"Facultatif — allergies, végétarien, végan, autre"}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.f.rolePick', '{"en":"Select a role","it":"Seleziona un ruolo","nl":"Kies een functie","fr":"Choisir une fonction"}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.f.countryPick', '{"en":"Select a country","it":"Seleziona un paese","nl":"Kies een land","fr":"Choisir un pays"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.roles.r0', '{"en":"Eye bank director","it":"Direttore banca degli occhi","nl":"Directeur oogbank","fr":"Directeur de banque d''yeux"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.roles.r1', '{"en":"Eye bank technician","it":"Tecnico banca degli occhi","nl":"Technicus oogbank","fr":"Technicien de banque d''yeux"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.roles.r2', '{"en":"Ophthalmologist / Surgeon","it":"Oculista / Chirurgo","nl":"Oogarts / Chirurg","fr":"Ophtalmologue / Chirurgien"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.roles.r3', '{"en":"Researcher","it":"Ricercatore","nl":"Onderzoeker","fr":"Chercheur"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.roles.r4', '{"en":"Nurse / Coordinator","it":"Infermiere / Coordinatore","nl":"Verpleegkundige / Coördinator","fr":"Infirmier / Coordinateur"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.roles.r5', '{"en":"Quality / Regulatory","it":"Qualità / Regolatorio","nl":"Kwaliteit / Regelgeving","fr":"Qualité / Réglementaire"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.roles.r6', '{"en":"Industry","it":"Industria","nl":"Industrie","fr":"Industrie"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.roles.r7', '{"en":"Other","it":"Altro","nl":"Anders","fr":"Autre"}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.consent1', '{"en":"I accept the terms of participation and the cancellation policy.","it":"Accetto le condizioni di partecipazione e la politica di cancellazione.","nl":"Ik aanvaard de deelnamevoorwaarden en het annuleringsbeleid.","fr":"J''accepte les conditions de participation et la politique d''annulation."}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.consent2', '{"en":"I agree to the processing of my data for the organisation of the meeting (GDPR).","it":"Acconsento al trattamento dei miei dati per l''organizzazione del congresso (GDPR).","nl":"Ik ga akkoord met de verwerking van mijn gegevens voor de organisatie van de vergadering (AVG).","fr":"J''accepte le traitement de mes données pour l''organisation du congrès (RGPD)."}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.consent3', '{"en":"I would like to receive news about EEBA meetings and webinars.","it":"Desidero ricevere notizie sui congressi e i webinar EEBA.","nl":"Ik ontvang graag nieuws over EEBA-vergaderingen en webinars.","fr":"Je souhaite recevoir des nouvelles des congrès et webinaires EEBA."}');
@@ -296,5 +312,5 @@ INSERT INTO translations (tkey, value_json) VALUES ('foot.terms', '{"en":"Terms"
 INSERT INTO translations (tkey, value_json) VALUES ('foot.cook', '{"en":"Cookies","it":"Cookie","nl":"Cookies","fr":"Cookies"}');
 INSERT INTO translations (tkey, value_json) VALUES ('foot.disc', '{"en":"Demo prototype. Programme, fees and deadlines are indicative and not an official EEBA publication.","it":"Prototipo dimostrativo. Programma, quote e scadenze sono indicativi e non costituiscono una pubblicazione ufficiale EEBA.","nl":"Demonstratieprototype. Programma, tarieven en deadlines zijn indicatief en vormen geen officiële EEBA-publicatie.","fr":"Prototype de démonstration. Programme, tarifs et échéances sont indicatifs et ne constituent pas une publication officielle de l''EEBA."}');
 
--- 227 chiavi di traduzione, 5 tariffe, 4 extra, 20 slot di programma.
+-- 236 chiavi di traduzione, 5 tariffe, 4 extra, 20 slot di programma.
 -- Nessun utente creato: il primo admin si registra da /admin (setup iniziale).

@@ -99,6 +99,55 @@ function sameOrigin(request) {
   try { return new URL(origin).host === new URL(request.url).host; } catch { return false; }
 }
 
+/* ------------------------------------------------- validazione impostazioni */
+/* L'SVG del logo viene poi inserito nella pagina come markup: qui si toglie
+   tutto ciò che potrebbe eseguire codice. Chi ha accesso al backoffice è una
+   persona fidata, ma un account compromesso non deve poter iniettare script
+   nel sito pubblico. */
+function cleanSvg(raw) {
+  let s = String(raw || "").trim();
+  if (!s) return "";
+  if (!s.startsWith("<svg")) return new Error("deve iniziare con <svg");
+  if (s.length > 64 * 1024) return new Error("troppo grande, massimo 64 KB");
+  s = s.replace(/<\s*(script|foreignObject|iframe|object|embed|animate|set)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, "");
+  s = s.replace(/<\s*(script|foreignObject|iframe|object|embed)\b[^>]*\/?>/gi, "");
+  s = s.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+  s = s.replace(/(href|xlink:href|src)\s*=\s*("|')?\s*(javascript|data:text\/html)[^"'\s>]*("|')?/gi, "");
+  return s;
+}
+
+function sanitizeSetting(key, value) {
+  const v = String(value ?? "");
+  switch (key) {
+    case "logo_svg":    return cleanSvg(v);
+    case "logo_url":
+      if (v && !/^https:\/\//i.test(v)) return new Error("deve essere un URL https");
+      return v;
+    case "theme_accent":
+      if (v && !/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v.trim())) return new Error("colore esadecimale non valido");
+      return v ? "#" + v.replace("#", "").toLowerCase() : "";
+    case "event_days": {
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 1 || n > 14) return new Error("da 1 a 14");
+      return String(n);
+    }
+    case "languages":
+      if (!/^[a-z]{2}(,[a-z]{2})*$/.test(v.trim())) return new Error("codici di due lettere separati da virgola");
+      return v.trim();
+    case "session_tags":
+      if (!/^[a-z0-9_]+(,[a-z0-9_]+)*$/.test(v.trim())) return new Error("codici separati da virgola, solo lettere minuscole");
+      return v.trim();
+    case "early_until":
+    case "stat_target_date":
+      if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return new Error("formato AAAA-MM-GG");
+      return v;
+    case "registration_open":
+      return v === "1" || v === "0" ? v : new Error("solo 0 o 1");
+    default:
+      return v.slice(0, 4000);
+  }
+}
+
 /* ------------------------------------------------------- entità CRUD generiche */
 const ENTITIES = {
   speakers: {
@@ -281,6 +330,14 @@ export async function onRequest(context) {
         await env.DB.prepare(`UPDATE users SET last_login_at = datetime('now') WHERE id = ?1`).bind(u.id).run();
         await audit(env, u, "login", "users", u.id, null);
 
+        /* Manutenzione al login: è raro abbastanza da non pesare e frequente
+           abbastanza da non far crescere le tabelle all'infinito. */
+        try {
+          await env.DB.prepare(`DELETE FROM sessions WHERE expires_at <= datetime('now')`).run();
+          await env.DB.prepare(
+            `DELETE FROM audit_log WHERE created_at < datetime('now','-180 days')`).run();
+        } catch { /* la pulizia non deve mai impedire l'accesso */ }
+
         return json({ user: { id: u.id, email: u.email, name: u.name, role: u.role } },
                      200, { "set-cookie": setCookie(token, SESSION_HOURS * 3600) });
       }
@@ -334,8 +391,14 @@ export async function onRequest(context) {
                        WHERE active = 1 ORDER BY sort, id`).all()
         ]);
 
-        const programme = { 1: [], 2: [], 3: [] };
+        /* Le giornate si ricavano dalle impostazioni, non da un numero fisso:
+           un'edizione più lunga o più corta non richiede di toccare il codice. */
+        const settingsMap = Object.fromEntries(settings.results.map(r => [r.skey, r.svalue]));
+        const days = Math.max(1, Math.min(14, Number(settingsMap.event_days) || 3));
+        const programme = {};
+        for (let d = 1; d <= days; d++) programme[d] = [];
         for (const s of slots.results) {
+          if (!programme[s.day_no]) continue;   // sessione oltre le giornate configurate
           programme[s.day_no].push({
             t: s.time, tag: s.tag || null,
             h: parseJson(s.title_json, {}), p: parseJson(s.desc_json, {})
@@ -343,7 +406,7 @@ export async function onRequest(context) {
         }
 
         return json({
-          settings: Object.fromEntries(settings.results.map(r => [r.skey, r.svalue])),
+          settings: settingsMap,
           translations: Object.fromEntries(translations.results.map(r => [r.tkey, parseJson(r.value_json, {})])),
           programme,
           speakers: speakers.results.map(hydrateJson),
@@ -366,9 +429,17 @@ export async function onRequest(context) {
         if (!body.consent_terms || !body.consent_gdpr) return err(400, "Consensi obbligatori mancanti");
 
         const tier = await env.DB.prepare(
-          `SELECT code, early_price, late_price FROM tiers WHERE code = ?1 AND active = 1`)
+          `SELECT code, early_price, late_price, capacity FROM tiers WHERE code = ?1 AND active = 1`)
           .bind(String(body.tier_code)).first();
         if (!tier) return err(400, "Tariffa non valida");
+
+        if (tier.capacity != null) {
+          const used = await env.DB.prepare(
+            `SELECT COUNT(*) AS c FROM registrations
+              WHERE tier_code = ?1 AND payment_status <> 'cancelled'`).bind(tier.code).first();
+          if ((used?.c ?? 0) >= tier.capacity)
+            return err(409, `Posti esauriti per la tariffa "${tier.code}"`, { soldOut: tier.code });
+        }
 
         const earlyRow = await env.DB.prepare(`SELECT svalue FROM settings WHERE skey='early_until'`).first();
         const isEarly = earlyRow ? Date.now() < new Date(earlyRow.svalue + "T23:59:59Z").getTime() : false;
@@ -476,13 +547,12 @@ export async function onRequest(context) {
 
       /* --- iscrizioni --- */
       if (seg[1] === "registrations") {
-        if (method === "GET" && !seg[2]) {
+        /* Stessi filtri per l'elenco e per l'export: quello che vedi è quello
+           che scarichi. */
+        const buildFilter = () => {
           const status = url.searchParams.get("status") || "";
           const tier   = url.searchParams.get("tier") || "";
           const search = (url.searchParams.get("q") || "").trim();
-          const limit  = Math.min(Number(url.searchParams.get("limit")) || 100, 500);
-          const offset = Math.max(Number(url.searchParams.get("offset")) || 0, 0);
-
           const where = [], bind = [];
           if (status) { bind.push(status); where.push(`payment_status = ?${bind.length}`); }
           if (tier)   { bind.push(tier);   where.push(`tier_code = ?${bind.length}`); }
@@ -491,7 +561,13 @@ export async function onRequest(context) {
             const p = `?${bind.length}`;
             where.push(`(first_name LIKE ${p} OR last_name LIKE ${p} OR email LIKE ${p} OR org LIKE ${p} OR ref LIKE ${p})`);
           }
-          const wsql = where.length ? "WHERE " + where.join(" AND ") : "";
+          return { wsql: where.length ? "WHERE " + where.join(" AND ") : "", bind };
+        };
+
+        if (method === "GET" && !seg[2]) {
+          const limit  = Math.min(Number(url.searchParams.get("limit")) || 100, 500);
+          const offset = Math.max(Number(url.searchParams.get("offset")) || 0, 0);
+          const { wsql, bind } = buildFilter();
 
           const count = await env.DB.prepare(`SELECT COUNT(*) AS n FROM registrations ${wsql}`)
             .bind(...bind).first();
@@ -504,11 +580,12 @@ export async function onRequest(context) {
         }
 
         if (seg[2] === "export.csv" && method === "GET") {
+          const { wsql, bind } = buildFilter();
           const { results } = await env.DB.prepare(
             `SELECT ref, first_name, last_name, email, org, role, country, vat, diet, lang,
                     tier_code, tier_price, addons_json, addons_total, total,
                     payment_method, payment_status, created_at
-               FROM registrations ORDER BY created_at DESC`).all();
+               FROM registrations ${wsql} ORDER BY created_at DESC`).bind(...bind).all();
           const cols = Object.keys(results[0] || { ref: "" });
           const cell = v => {
             const s = v == null ? "" : String(v);
@@ -581,7 +658,9 @@ export async function onRequest(context) {
           return json({ results });
         }
         if (method === "PATCH") {
-          const entries = Object.entries(body || {});
+          const entries = Object.entries(body || {}).map(([k, v]) => [k, sanitizeSetting(k, v)]);
+          const bad = entries.find(([, v]) => v instanceof Error);
+          if (bad) return err(400, `Valore non valido per "${bad[0]}": ${bad[1].message}`);
           if (!entries.length) return err(400, "Nessuna impostazione da salvare");
           const stmt = env.DB.prepare(
             `INSERT INTO settings (skey, svalue) VALUES (?1, ?2)
