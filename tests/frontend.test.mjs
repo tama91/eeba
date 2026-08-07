@@ -142,7 +142,7 @@ for (const [file, shared] of [
 /* ------------------------------------------------- classi, id, endpoint */
 group("Classi CSS e id");
 for (const [label, srcs, cssFile] of [
-  ["sito", ["public/index.html", "public/app.js", "public/pagamento.html", "public/checkout-anteprima.html", "public/404.html"], "public/styles.css"],
+  ["sito", ["public/index.html", "public/app.js", "public/pagamento.html", "public/checkout-anteprima.html", "public/404.html", "public/legal.html"], "public/styles.css"],
   ["backoffice", ["public/admin/index.html", "public/admin/admin.js"], "public/admin/admin.css"]
 ]) {
   let css = read(cssFile);
@@ -204,6 +204,40 @@ group("Coerenza fra browser e server");
   const serverCodes = [...block.matchAll(/^\s{2}([a-z_]+):\s*\{/gm)].map(m => m[1]);
   const extra = serverCodes.filter(c => !PAYMENT_METHODS.some(m => m.code === c));
   check("il server non conosce metodi che il browser ignora", extra.length === 0, extra.join(", "));
+}
+
+/* ------------------------------------------------------- pagine legali */
+group("Pagine legali");
+{
+  const { LEGAL, LEGAL_UI, LEGAL_ORG } =
+    new Function(read("public/legal-content.js") + ";return {LEGAL,LEGAL_UI,LEGAL_ORG};")();
+  const langs = ["en", "it", "nl", "fr"];
+
+  for (const [doc, d] of Object.entries(LEGAL)) {
+    const holes = [];
+    for (const l of langs) {
+      if (!d.title[l]) holes.push(`${l}:titolo`);
+      d.sections.forEach((s, i) => {
+        if (!s.h[l]) holes.push(`${l}:h${i}`);
+        if (!s.body[l] || s.body[l].trim().length < 40) holes.push(`${l}:testo${i}`);
+      });
+    }
+    check(`${doc}: ${d.sections.length} sezioni complete in 4 lingue`, holes.length === 0, holes.slice(0, 6).join(", "));
+  }
+
+  const html = read("public/index.html");
+  for (const doc of ["privacy", "terms", "cookies"])
+    check(`il piè di pagina rimanda a ${doc}`, html.includes(`/legal.html?doc=${doc}`));
+
+  // niente Google Fonts: è il motivo per cui non serve un banner cookie
+  const pages = ["public/index.html", "public/admin/index.html", "public/404.html",
+                 "public/pagamento.html", "public/checkout-anteprima.html", "public/legal.html"];
+  const withGoogle = pages.filter(p => /fonts\.(googleapis|gstatic)\.com/.test(read(p)));
+  check("nessuna pagina carica i font da Google", withGoogle.length === 0, withGoogle.join(", "));
+
+  // l'indirizzo del titolare è un segnaposto finché non viene compilato
+  check("⚠ email del titolare ancora da compilare — non blocca i test",
+        true, LEGAL_ORG.email);
 }
 
 /* ------------------------------------------------------------- sicurezza */

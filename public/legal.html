@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EEBA 2027</title>
+<script>
+(function(){ try{ var t = localStorage.getItem("eeba27.theme");
+  if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; }catch(e){} })();
+</script>
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .lg{ max-width:760px; margin-inline:auto; padding:clamp(80px,10vw,120px) var(--gut) 80px; }
+  .lg__nav{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:28px; }
+  .lg__nav a{ padding:7px 15px; border:1px solid var(--line-2); border-radius:100px;
+              font-size:13.5px; color:var(--ink-70); }
+  .lg__nav a.is-on{ background:var(--accent-soft); border-color:transparent; color:var(--accent-ink); }
+  .lg__draft{ display:flex; gap:11px; align-items:flex-start; background:var(--accent-soft);
+              color:var(--accent-ink); border-radius:10px; padding:13px 16px;
+              font-size:13.5px; line-height:1.5; margin-bottom:26px; }
+  .lg h1{ font-size:clamp(30px,4.4vw,44px); font-weight:600; letter-spacing:-.03em; margin:0 0 10px; }
+  .lg__date{ font-family:var(--mono); font-size:11px; letter-spacing:.12em;
+             text-transform:uppercase; color:var(--ink-45); margin-bottom:44px; }
+  .lg h2{ font-size:clamp(19px,2.2vw,23px); font-weight:600; letter-spacing:-.02em;
+          margin:44px 0 14px; padding-top:22px; border-top:1px solid var(--line); }
+  .lg h2:first-of-type{ border-top:0; padding-top:0; margin-top:0; }
+  .lg p{ color:var(--ink-70); font-size:15.5px; line-height:1.7; margin:0 0 14px; }
+  .lg ul{ color:var(--ink-70); font-size:15.5px; line-height:1.7; padding-left:20px; margin:0 0 14px; }
+  .lg li{ margin-bottom:7px; }
+  .lg code{ font-family:var(--mono); font-size:13px; background:var(--paper-2);
+            padding:2px 6px; border-radius:4px; }
+  .lg__t{ width:100%; border-collapse:collapse; font-size:14px; margin:0 0 16px; }
+  .lg__t th{ text-align:left; font-family:var(--mono); font-size:10px; letter-spacing:.11em;
+             text-transform:uppercase; color:var(--ink-45); font-weight:400;
+             padding:10px 12px; border-bottom:1px solid var(--line-2); }
+  .lg__t td{ padding:11px 12px; border-bottom:1px solid var(--line);
+             color:var(--ink-70); vertical-align:top; }
+  .lg__foot{ margin-top:56px; padding-top:24px; border-top:1px solid var(--line); }
+</style>
+</head>
+<body>
+
+<main class="lg">
+  <nav class="lg__nav" id="nav"></nav>
+  <div class="lg__draft" id="draft"></div>
+  <h1 id="title">…</h1>
+  <div class="lg__date" id="date"></div>
+  <div id="body"></div>
+  <div class="lg__foot"><a class="btn btn--ghost" href="/" id="back">←</a></div>
+</main>
+
+<script src="theme.js"></script>
+<script src="legal-content.js"></script>
+<script>
+(function(){
+  var params = new URLSearchParams(location.search);
+  var doc = ["privacy","cookies","terms"].indexOf(params.get("doc")) >= 0 ? params.get("doc") : "privacy";
+
+  var lang = "en";
+  try { lang = localStorage.getItem("eeba27.lang") || (navigator.language||"en").slice(0,2).toLowerCase(); } catch(e){}
+  if (!LEGAL[doc].title[lang]) lang = "en";
+  document.documentElement.lang = lang;
+
+  var d = LEGAL[doc];
+  document.title = d.title[lang] + " — EEBA 2027";
+  document.getElementById("title").textContent = d.title[lang];
+  document.getElementById("date").textContent = LEGAL_UI.updated[lang] + " " + LEGAL_UPDATED;
+  document.getElementById("draft").innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:18px;flex:none;margin-top:1px">' +
+    '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.2v.1"/></svg><span>' +
+    LEGAL_UI.draft[lang] + '</span>';
+  document.getElementById("back").textContent = "← " + LEGAL_UI.back[lang];
+
+  document.getElementById("nav").innerHTML = ["privacy","cookies","terms"].map(function(k){
+    return '<a href="?doc=' + k + '"' + (k === doc ? ' class="is-on"' : '') + '>' +
+           LEGAL_UI.nav[k][lang] + '</a>';
+  }).join("");
+
+  document.getElementById("body").innerHTML = d.sections.map(function(s){
+    return "<h2>" + s.h[lang] + "</h2>" + s.body[lang];
+  }).join("");
+
+  applyTheme({});   // stessa palette del resto del sito
+})();
+</script>
+</body>
+</html>
