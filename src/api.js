@@ -244,6 +244,7 @@ function sanitizeSetting(key, value) {
     case "stat_target_date":
       if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return new Error("formato AAAA-MM-GG");
       return v;
+    case "meals_enabled":
     case "registration_open":
       return v === "1" || v === "0" ? v : new Error("solo 0 o 1");
     case "payments_mode":
@@ -289,6 +290,10 @@ const ENTITIES = {
   translations: {
     table: "translations", order: "tkey",
     fields: ["tkey", "value_json"]
+  },
+  meals: {
+    table: "meals", order: "sort, id",
+    fields: ["code", "name_json", "sort", "active"]
   }
 };
 
@@ -496,7 +501,7 @@ export async function onRequest(context) {
 
       if (seg[1] === "content" && method === "GET") {
         const db = env.DB;
-        const [settings, translations, slots, speakers, sponsors, tiers, addons] = await Promise.all([
+        const [settings, translations, slots, speakers, sponsors, tiers, addons, meals] = await Promise.all([
           db.prepare(`SELECT skey, svalue FROM settings`).all(),
           db.prepare(`SELECT tkey, value_json FROM translations`).all(),
           db.prepare(`SELECT day_no, time, tag, title_json, desc_json FROM programme_slots
@@ -508,6 +513,8 @@ export async function onRequest(context) {
           db.prepare(`SELECT code, early_price, late_price, name_json, desc_json FROM tiers
                        WHERE active = 1 ORDER BY sort, id`).all(),
           db.prepare(`SELECT code, price, name_json, desc_json FROM addons
+                       WHERE active = 1 ORDER BY sort, id`).all(),
+          db.prepare(`SELECT code, name_json FROM meals
                        WHERE active = 1 ORDER BY sort, id`).all()
         ]);
 
@@ -537,7 +544,8 @@ export async function onRequest(context) {
           speakers: speakers.results.map(hydrateJson),
           sponsors: sponsors.results,
           tiers: tiers.results.map(hydrateJson),
-          addons: addons.results.map(hydrateJson)
+          addons: addons.results.map(hydrateJson),
+          meals: settingsMap.meals_enabled === "0" ? [] : meals.results.map(hydrateJson)
         }, 200, { "cache-control": "public, max-age=60, s-maxage=60" });
       }
 
@@ -552,6 +560,24 @@ export async function onRequest(context) {
         const email = String(body.email).trim();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return err(400, "Email non valida");
         if (!body.consent_terms || !body.consent_gdpr) return err(400, "Consensi obbligatori mancanti");
+
+        /* Il menu è una scelta fra opzioni: se arriva un codice inventato si
+           salva vuoto invece di accettarlo. */
+        let meal = null;
+        const wantMeal = String(body.meal || "").trim();
+        if (wantMeal) {
+          const m = await env.DB.prepare(
+            `SELECT code FROM meals WHERE code = ?1 AND active = 1`).bind(wantMeal).first();
+          meal = m ? m.code : null;
+        }
+
+        /* Le allergie sono dati sanitari: senza consenso esplicito non si
+           salvano, e la richiesta viene rifiutata invece di scartarle in
+           silenzio — chi le ha scritte deve sapere che non sono arrivate. */
+        const allergies = String(body.allergies || "").trim().slice(0, 500);
+        if (allergies && !body.allergies_consent)
+          return err(400, "Serve il consenso esplicito per comunicare allergie o intolleranze",
+                     { field: "allergies_consent" });
 
         const tier = await env.DB.prepare(
           `SELECT code, early_price, late_price, capacity FROM tiers WHERE code = ?1 AND active = 1`)
@@ -602,14 +628,15 @@ export async function onRequest(context) {
 
         await env.DB.prepare(
           `INSERT INTO registrations
-             (ref, first_name, last_name, email, org, role, country, vat, diet, lang,
+             (ref, first_name, last_name, email, org, role, country, vat,
+              meal, allergies, allergies_ok, lang,
               tier_code, tier_price, addons_json, addons_total, total,
               payment_method, payment_status, newsletter)
-           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,'pending',?17)`)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,'pending',?19)`)
           .bind(ref,
             String(body.first_name).trim(), String(body.last_name).trim(), email,
             String(body.org || "").trim(), body.role || null, body.country || null,
-            body.vat || null, body.diet || null, body.lang || "en",
+            body.vat || null, meal, allergies || null, allergies ? 1 : 0, body.lang || "en",
             tier.code, tierPrice, JSON.stringify(chosen), addonsTotal, total,
             method, body.newsletter ? 1 : 0).run();
 
@@ -740,7 +767,7 @@ export async function onRequest(context) {
       /* --- riepilogo dashboard --- */
       if (seg[1] === "stats" && method === "GET") {
         const db = env.DB;
-        const [tot, byStatus, byTier, byCountry, daily, addonRows, recent, cap] = await Promise.all([
+        const [tot, byStatus, byTier, byCountry, daily, addonRows, recent, cap, byMeal, allergyRows] = await Promise.all([
           db.prepare(`SELECT COUNT(*) AS n,
                              COALESCE(SUM(total),0) AS gross,
                              COALESCE(SUM(CASE WHEN payment_status='paid' THEN total ELSE 0 END),0) AS paid,
@@ -762,7 +789,14 @@ export async function onRequest(context) {
           db.prepare(`SELECT ref, first_name, last_name, email, org, country, tier_code, total,
                              payment_status, created_at
                         FROM registrations ORDER BY created_at DESC, id DESC LIMIT 8`).all(),
-          db.prepare(`SELECT code, capacity, name_json FROM addons WHERE capacity IS NOT NULL`).all()
+          db.prepare(`SELECT code, capacity, name_json FROM addons WHERE capacity IS NOT NULL`).all(),
+          db.prepare(`SELECT COALESCE(r.meal,'—') AS k, COUNT(*) AS n, m.name_json
+                        FROM registrations r LEFT JOIN meals m ON m.code = r.meal
+                       WHERE r.payment_status <> 'cancelled'
+                       GROUP BY r.meal ORDER BY n DESC`).all(),
+          db.prepare(`SELECT ref, first_name, last_name, allergies FROM registrations
+                       WHERE allergies IS NOT NULL AND TRIM(allergies) <> ''
+                         AND payment_status <> 'cancelled' ORDER BY last_name`).all()
         ]);
 
         const addonCount = {};
@@ -780,7 +814,9 @@ export async function onRequest(context) {
             code: a.code, capacity: a.capacity,
             used: addonCount[a.code] || 0, name: parseJson(a.name_json, {})
           })),
-          recent: recent.results
+          recent: recent.results,
+          meals: byMeal.results.map(r => ({ code: r.k, n: r.n, name: parseJson(r.name_json, {}) })),
+          allergies: allergyRows.results
         });
       }
 
@@ -791,10 +827,12 @@ export async function onRequest(context) {
         const buildFilter = () => {
           const status = url.searchParams.get("status") || "";
           const tier   = url.searchParams.get("tier") || "";
+          const meal   = url.searchParams.get("meal") || "";
           const search = (url.searchParams.get("q") || "").trim();
           const where = [], bind = [];
           if (status) { bind.push(status); where.push(`payment_status = ?${bind.length}`); }
           if (tier)   { bind.push(tier);   where.push(`tier_code = ?${bind.length}`); }
+          if (meal)   { bind.push(meal);   where.push(`meal = ?${bind.length}`); }
           if (search) {
             bind.push(`%${search}%`);
             const p = `?${bind.length}`;
@@ -821,7 +859,7 @@ export async function onRequest(context) {
         if (seg[2] === "export.csv" && method === "GET") {
           const { wsql, bind } = buildFilter();
           const { results } = await env.DB.prepare(
-            `SELECT ref, first_name, last_name, email, org, role, country, vat, diet, lang,
+            `SELECT ref, first_name, last_name, email, org, role, country, vat, meal, allergies, lang,
                     tier_code, tier_price, addons_json, addons_total, total,
                     payment_method, payment_status, created_at
                FROM registrations ${wsql} ORDER BY created_at DESC`).bind(...bind).all();
@@ -841,7 +879,7 @@ export async function onRequest(context) {
         }
 
         if (seg[2] && method === "PATCH") {
-          const allowed = ["payment_status", "payment_method", "notes", "diet", "org", "country", "role"];
+          const allowed = ["payment_status", "payment_method", "notes", "meal", "allergies", "org", "country", "role"];
           const cols = [], vals = [];
           for (const f of allowed) if (f in body) { cols.push(f); vals.push(body[f]); }
           if (!cols.length) return err(400, "Nessun campo modificabile");

@@ -12,6 +12,7 @@ let ME = null;
 let LANGS = ["en", "it", "nl", "fr"];
 let SETTINGS = {};          // cache delle impostazioni, aggiornata a ogni accesso
 let TR = {};                // cache delle traduzioni, per le etichette leggibili
+let MEALS = [];             // opzioni di menu, per etichette e filtri
 const LANG_LABEL = { en: "English", it: "Italiano", nl: "Nederlands", fr: "Français", de: "Deutsch", es: "Español" };
 
 /* ------------------------------------------------------------------ utils */
@@ -112,6 +113,7 @@ async function refreshConfig() {
     const t = await api("/admin/translations");
     TR = Object.fromEntries(t.results.map(r => [r.tkey, r.value_json]));
   } catch {}
+  try { MEALS = (await api("/admin/meals")).results; } catch {}
 }
 
 /* Etichetta tradotta di una chiave, preferendo l'italiano nel backoffice. */
@@ -136,6 +138,14 @@ function dayHeading(n) {
 
 /* Ruoli: nel database c'è il codice r0…rN, qui si mostra l'etichetta. */
 const roleLabel = code => code ? label("reg.roles." + code, code) : "—";
+
+/* Nome leggibile di un'opzione di menu, preferendo l'italiano nel backoffice. */
+const mealLabel = code => {
+  if (!code) return "—";
+  const m = MEALS.find(x => x.code === code);
+  const n = m && m.name_json;
+  return (n && (n.it || n.en || Object.values(n).find(Boolean))) || code;
+};
 
 $("#loginForm").addEventListener("submit", async e => {
   e.preventDefault();
@@ -338,6 +348,17 @@ VIEWS.dashboard = async function () {
   const tierName = {};
   try { (await api("/admin/tiers")).results.forEach(x => tierName[x.code] = x.name_json.it || x.name_json.en || x.code); } catch {}
 
+  const cateringText = () =>
+    [`EEBA 2027 — riepilogo ristorazione (${new Date().toLocaleDateString("it-IT")})`, "",
+     "Conteggi per menu:",
+     ...(s.meals || []).map(m => `  ${mealLabel(m.code)}: ${m.n}`),
+     "",
+     `Allergie e intolleranze (${(s.allergies || []).length}):`,
+     ...((s.allergies || []).length
+        ? s.allergies.map(a => `  ${a.first_name} ${a.last_name} — ${a.allergies}`)
+        : ["  nessuna"])
+    ].join("\n");
+
   $("#view").innerHTML = `
     <div class="kpis">
       <div class="kpi"><div class="kpi__l">Iscrizioni</div><div class="kpi__v">${t.n || 0}</div>
@@ -383,6 +404,30 @@ VIEWS.dashboard = async function () {
       </div>
     </div>
 
+    ${(s.meals || []).length ? `<div class="card" style="margin-bottom:20px">
+      <div class="card__h"><h3>Ristorazione</h3>
+        <span class="pill pill--plain">${(s.allergies || []).length} con allergie</span>
+        <div class="act"><button class="btn btn--ghost btn--sm" id="copyCatering">Copia per il catering</button></div></div>
+      <div class="card__b">
+        <div class="grid2" style="margin:0">
+          <div>${hbars(s.meals.map(m => ({ k: m.code, n: m.n })),
+                       r => mealLabel(r.k))}</div>
+          <div>
+            ${(s.allergies || []).length ? `<div class="tblwrap"><table>
+              <thead><tr><th>Delegato</th><th>Allergie e intolleranze</th></tr></thead>
+              <tbody>${s.allergies.map(a => `<tr>
+                <td>${esc(a.first_name)} ${esc(a.last_name)}<div class="muted mono">${esc(a.ref)}</div></td>
+                <td>${esc(a.allergies)}</td></tr>`).join("")}</tbody></table></div>`
+              : `<div class="empty" style="padding:28px">Nessuna allergia segnalata</div>`}
+          </div>
+        </div>
+        <p class="hint" style="margin:16px 0 0">
+          Al catering conviene mandare i <b>conteggi</b> per il menu e, solo per le allergie,
+          i nomi: sono dati sanitari e vanno comunicati al minimo necessario. Il pulsante qui
+          sopra prepara il testo già in questa forma.</p>
+      </div>
+    </div>` : ""}
+
     <div class="card">
       <div class="card__h"><h3>Ultime iscrizioni</h3>
         <div class="act"><a class="btn btn--ghost btn--sm" href="#/registrations">Vedi tutte</a></div></div>
@@ -404,10 +449,14 @@ VIEWS.dashboard = async function () {
         </tbody></table>
       </div>
     </div>`;
+
+  $("#copyCatering")?.addEventListener("click", () => {
+    navigator.clipboard?.writeText(cateringText()).then(() => toast("Riepilogo copiato"), () => {});
+  });
 };
 
 /* ======================================================== ISCRIZIONI */
-const regFilters = { q: "", status: "", tier: "", offset: 0, limit: 50 };
+const regFilters = { q: "", status: "", tier: "", meal: "", offset: 0, limit: 50 };
 
 VIEWS.registrations = async function () {
   const tiers = (await api("/admin/tiers")).results;
@@ -425,6 +474,10 @@ VIEWS.registrations = async function () {
         <option value="">Tutti gli stati</option>
         ${Object.entries(statusLabel).map(([k, v]) => `<option value="${k}" ${regFilters.status === k ? "selected" : ""}>${v}</option>`).join("")}
       </select>
+      <select id="fmeal">
+        <option value="">Tutti i menu</option>
+        ${MEALS.map(m => `<option value="${esc(m.code)}">${esc(mealLabel(m.code))}</option>`).join("")}
+      </select>
       <select id="ftier">
         <option value="">Tutte le tariffe</option>
         ${tiers.map(t => `<option value="${esc(t.code)}" ${regFilters.tier === t.code ? "selected" : ""}>${esc(tierName[t.code])}</option>`).join("")}
@@ -434,10 +487,10 @@ VIEWS.registrations = async function () {
     </div>
     <div class="card"><div class="tblwrap"><table>
       <thead><tr>
-        <th>Riferimento</th><th>Delegato</th><th>Ente</th><th>Tariffa</th><th>Extra</th>
+        <th>Riferimento</th><th>Delegato</th><th>Ente</th><th>Tariffa</th><th>Menu</th><th>Extra</th>
         <th class="num">Totale</th><th>Stato</th><th>Data</th><th></th>
       </tr></thead>
-      <tbody id="regRows"><tr><td colspan="9"><div class="spinner"></div></td></tr></tbody>
+      <tbody id="regRows"><tr><td colspan="10"><div class="spinner"></div></td></tr></tbody>
     </table></div>
     <div style="padding:14px 20px;display:flex;gap:10px;align-items:center;border-top:1px solid var(--line)">
       <button class="btn btn--ghost btn--sm" id="prevPage">← Precedenti</button>
@@ -447,7 +500,7 @@ VIEWS.registrations = async function () {
 
   async function load() {
     const p = new URLSearchParams({
-      q: regFilters.q, status: regFilters.status, tier: regFilters.tier,
+      q: regFilters.q, status: regFilters.status, tier: regFilters.tier, meal: regFilters.meal || "",
       limit: regFilters.limit, offset: regFilters.offset
     });
     const d = await api("/admin/registrations?" + p);
@@ -463,13 +516,15 @@ VIEWS.registrations = async function () {
         <td>${esc(r.first_name)} ${esc(r.last_name)}<div class="muted">${esc(r.email)}</div></td>
         <td>${esc(r.org || "—")}<div class="muted">${esc(r.country || "")}</div></td>
         <td><span class="pill pill--plain">${esc(tierName[r.tier_code] || r.tier_code)}</span></td>
+        <td>${r.meal ? `<span class="pill pill--plain">${esc(mealLabel(r.meal))}</span>` : `<span class="muted">—</span>`}${
+          r.allergies ? ` <span class="pill pill--pending" title="${esc(r.allergies)}">allergie</span>` : ""}</td>
         <td class="muted">${(r.addons_json && r.addons_json.length) ? r.addons_json.join(", ") : "—"}</td>
         <td class="num">${money(r.total)}</td>
         <td><span class="pill pill--${r.payment_status}">${statusLabel[r.payment_status] || r.payment_status}</span></td>
         <td class="muted">${dOnly(r.created_at)}</td>
         <td class="rowact"><button class="btn btn--subtle btn--sm" data-open="${r.id}">Apri</button></td>
       </tr>`).join("")
-      : `<tr><td colspan="9"><div class="empty">Nessuna iscrizione con questi filtri</div></td></tr>`;
+      : `<tr><td colspan="10"><div class="empty">Nessuna iscrizione con questi filtri</div></td></tr>`;
 
     $$("[data-open]").forEach(b => b.addEventListener("click", () =>
       openReg(d.results.find(x => String(x.id) === b.dataset.open), tierName, statusLabel, load)));
@@ -482,6 +537,7 @@ VIEWS.registrations = async function () {
   });
   $("#fstatus").addEventListener("change", e => { regFilters.status = e.target.value; regFilters.offset = 0; load(); });
   $("#ftier").addEventListener("change", e => { regFilters.tier = e.target.value; regFilters.offset = 0; load(); });
+  $("#fmeal").addEventListener("change", e => { regFilters.meal = e.target.value; regFilters.offset = 0; load(); });
   $("#prevPage").addEventListener("click", () => { regFilters.offset = Math.max(0, regFilters.offset - regFilters.limit); load(); });
   $("#nextPage").addEventListener("click", () => { regFilters.offset += regFilters.limit; load(); });
 
@@ -502,7 +558,11 @@ function openReg(r, tierName, statusLabel, reload) {
         <dt>Ruolo</dt><dd>${esc(roleLabel(r.role))}</dd>
         <dt>Paese</dt><dd>${esc(r.country || "—")}</dd>
         <dt>P. IVA</dt><dd>${esc(r.vat || "—")}</dd>
-        <dt>Esigenze alim.</dt><dd>${esc(r.diet || "—")}</dd>
+        <dt>Menu</dt><dd>${esc(mealLabel(r.meal))}</dd>
+        <dt>Allergie</dt><dd>${r.allergies
+          ? esc(r.allergies) + (r.allergies_ok ? ` <span class="pill pill--paid">consenso dato</span>`
+                                              : ` <span class="pill pill--cancelled">senza consenso</span>`)
+          : "—"}</dd>
         <dt>Lingua</dt><dd>${esc(r.lang)}</dd>
         <dt>Tariffa</dt><dd>${esc(tierName[r.tier_code] || r.tier_code)} — ${money(r.tier_price)}</dd>
         <dt>Extra</dt><dd>${(r.addons_json || []).length ? esc(r.addons_json.join(", ")) + " — " + money(r.addons_total) : "—"}</dd>
@@ -521,6 +581,11 @@ function openReg(r, tierName, statusLabel, reload) {
               `<option value="${k}" ${r.payment_method === k ? "selected" : ""}>${v}</option>`).join("")}
           </select></div>
       </div>
+      <div class="f"><label>Menu</label>
+        <select id="mMeal" ${ro ? "disabled" : ""}>
+          <option value="">—</option>
+          ${MEALS.map(m => `<option value="${esc(m.code)}" ${r.meal === m.code ? "selected" : ""}>${esc(mealLabel(m.code))}</option>`).join("")}
+        </select></div>
       <div class="f"><label>Note interne</label>
         <textarea id="mNotes" ${ro ? "disabled" : ""}>${esc(r.notes || "")}</textarea></div>`,
     actions: ro ? [{ label: "Chiudi", onClick: closeModal }] : [
@@ -539,6 +604,7 @@ function openReg(r, tierName, statusLabel, reload) {
             await apiJson(`/admin/registrations/${r.id}`, "PATCH", {
               payment_status: $("#mStatus").value,
               payment_method: $("#mMethod").value,
+              meal: $("#mMeal").value || null,
               notes: $("#mNotes").value
             });
             closeModal(); toast("Iscrizione aggiornata"); reload();
@@ -845,10 +911,13 @@ VIEWS.pricing = async function () {
   ]);
   const early = (settings.results.find(s => s.skey === "early_until") || {}).svalue || "";
 
-  setHeader("Tariffe ed extra", `Early bird valida fino al ${early || "—"} — i prezzi sono ricalcolati dal server a ogni iscrizione`,
+  const meals = await api("/admin/meals");
+
+  setHeader("Tariffe, extra e menu", `Early bird valida fino al ${early || "—"} — i prezzi sono ricalcolati dal server a ogni iscrizione`,
     canWrite() ? [
       { label: "+ Tariffa", onClick: () => editTier(null) },
-      { label: "+ Extra", onClick: () => editAddon(null) }
+      { label: "+ Extra", onClick: () => editAddon(null) },
+      { label: "+ Menu", onClick: () => editMeal(null) }
     ] : []);
 
   $("#view").innerHTML = `
@@ -869,7 +938,7 @@ VIEWS.pricing = async function () {
         </tbody></table></div>
     </div>
 
-    <div class="card">
+    <div class="card" style="margin-bottom:16px">
       <div class="card__h"><h3>Opzioni aggiuntive</h3></div>
       <div class="tblwrap"><table>
         <thead><tr><th>Codice</th><th>Nome (IT)</th><th class="num">Prezzo</th><th class="num">Capienza</th><th>Stato</th><th></th></tr></thead>
@@ -885,6 +954,8 @@ VIEWS.pricing = async function () {
         </tbody></table></div>
     </div>`;
 
+  $$("[data-meal]").forEach(b => b.addEventListener("click", () =>
+    editMeal(meals.results.find(x => String(x.id) === b.dataset.meal))));
   $$("[data-tier]").forEach(b => b.addEventListener("click", () =>
     editTier(tiers.results.find(x => String(x.id) === b.dataset.tier))));
   $$("[data-addon]").forEach(b => b.addEventListener("click", () =>
@@ -938,6 +1009,44 @@ VIEWS.pricing = async function () {
       await api(`/admin/${kind}/${o.id}`, { method: "DELETE" });
       closeModal(); toast("Eliminato"); route();
     });
+  }
+
+  function editMeal(m) {
+    const isNew = !m;
+    m = m || { code: "", name_json: {}, sort: 99, active: 1 };
+    modal({
+      title: isNew ? "Nuova opzione di menu" : "Modifica opzione di menu",
+      wide: true,
+      body: `
+        <div class="f-row">
+          <div class="f"><label>Codice</label><input id="kCode" value="${esc(m.code)}" placeholder="lactose_free">
+            <p class="hint">Identificatore breve. Non cambiarlo se ci sono già iscrizioni che lo usano.</p></div>
+          <div class="f"><label>Ordine</label><input id="kSort" type="number" value="${m.sort ?? 0}"></div>
+        </div>
+        ${langFieldHtml("mn", m.name_json, { label: "Nome" })}
+        <label class="switch"><input type="checkbox" id="kAct" ${m.active ? "checked" : ""}> Selezionabile in fase di iscrizione</label>`,
+      actions: [
+        { label: "Annulla", onClick: closeModal },
+        ...(isNew ? [] : [{ label: "Elimina", cls: "btn--danger", onClick: () =>
+            confirmDialog("Eliminare l'opzione?",
+              (m.name_json.it || m.code) + " — le iscrizioni che l'hanno scelta restano invariate.",
+              async () => {
+                await api(`/admin/meals/${m.id}`, { method: "DELETE" });
+                closeModal(); toast("Opzione eliminata"); await refreshConfig(); route();
+              }) }]),
+        { label: "Salva", cls: "btn--primary", onClick: async () => {
+            const payload = { code: $("#kCode").value.trim(), sort: Number($("#kSort").value) || 0,
+                              name_json: readLangField("mn"), active: $("#kAct").checked ? 1 : 0 };
+            if (!payload.code) return toast("Il codice è obbligatorio", true);
+            try {
+              if (isNew) await apiJson("/admin/meals", "POST", payload);
+              else await apiJson(`/admin/meals/${m.id}`, "PATCH", payload);
+              closeModal(); toast("Menu salvato"); await refreshConfig(); route();
+            } catch (e) { toast(e.message, true); }
+          } }
+      ]
+    });
+    bindLangTabs();
   }
 
   function editTier(t) {

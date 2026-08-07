@@ -25,6 +25,7 @@ INSERT INTO settings (skey, svalue) VALUES ('payments_mode', 'preview');
 INSERT INTO settings (skey, svalue) VALUES ('payments_methods', 'card,bancontact,ideal,paypal,revolut_pay,sepa,inv');
 INSERT INTO settings (skey, svalue) VALUES ('payments_currency', 'EUR');
 INSERT INTO settings (skey, svalue) VALUES ('invoice_note', '');
+INSERT INTO settings (skey, svalue) VALUES ('meals_enabled', '1');
 
 DELETE FROM tiers;
 INSERT INTO tiers (code, early_price, late_price, name_json, desc_json, sort, active) VALUES ('mem', 52000, 62000, '{"en":"EEBA Member","it":"Socio EEBA","nl":"EEBA-lid","fr":"Membre EEBA"}', '{"en":"Individual or institutional member in good standing","it":"Socio individuale o istituzionale in regola","nl":"Individueel of institutioneel lid in goede standing","fr":"Membre individuel ou institutionnel à jour de cotisation"}', 0, 1);
@@ -38,6 +39,14 @@ INSERT INTO addons (code, price, capacity, name_json, desc_json, sort, active) V
 INSERT INTO addons (code, price, capacity, name_json, desc_json, sort, active) VALUES ('gal', 9500, NULL, '{"en":"Gala dinner","it":"Cena di gala","nl":"Galadiner","fr":"Dîner de gala"}', '{"en":"Friday 9 April, central Leuven","it":"Venerdì 9 aprile, centro di Lovanio","nl":"Vrijdag 9 april, centrum Leuven","fr":"Vendredi 9 avril, centre de Louvain"}', 1, 1);
 INSERT INTO addons (code, price, capacity, name_json, desc_json, sort, active) VALUES ('acc', 7000, NULL, '{"en":"Accompanying person","it":"Accompagnatore","nl":"Begeleider","fr":"Accompagnant"}', '{"en":"Welcome reception and social programme","it":"Cocktail di benvenuto e programma sociale","nl":"Welkomstreceptie en sociaal programma","fr":"Cocktail de bienvenue et programme social"}', 2, 1);
 INSERT INTO addons (code, price, capacity, name_json, desc_json, sort, active) VALUES ('pri', 1500, NULL, '{"en":"Printed programme","it":"Programma stampato","nl":"Gedrukt programma","fr":"Programme imprimé"}', '{"en":"Collected at the registration desk","it":"Ritiro al desk registrazioni","nl":"Af te halen bij de registratiebalie","fr":"À retirer au bureau d''accueil"}', 3, 1);
+
+DELETE FROM meals;
+INSERT INTO meals (code, name_json, sort, active) VALUES ('standard', '{"en":"Standard menu","it":"Menu standard","nl":"Standaardmenu","fr":"Menu standard"}', 0, 1);
+INSERT INTO meals (code, name_json, sort, active) VALUES ('vegetarian', '{"en":"Vegetarian","it":"Vegetariano","nl":"Vegetarisch","fr":"Végétarien"}', 1, 1);
+INSERT INTO meals (code, name_json, sort, active) VALUES ('vegan', '{"en":"Vegan","it":"Vegano","nl":"Veganistisch","fr":"Végétalien"}', 2, 1);
+INSERT INTO meals (code, name_json, sort, active) VALUES ('gluten_free', '{"en":"Gluten free","it":"Senza glutine","nl":"Glutenvrij","fr":"Sans gluten"}', 3, 1);
+INSERT INTO meals (code, name_json, sort, active) VALUES ('no_pork', '{"en":"No pork","it":"Senza maiale","nl":"Zonder varkensvlees","fr":"Sans porc"}', 4, 1);
+INSERT INTO meals (code, name_json, sort, active) VALUES ('fish', '{"en":"Fish","it":"Pesce","nl":"Vis","fr":"Poisson"}', 5, 1);
 
 DELETE FROM programme_slots;
 INSERT INTO programme_slots (day_no, time, tag, title_json, desc_json, sort, published) VALUES (1, '08:30', NULL, '{"en":"Registration & welcome coffee","it":"Registrazione e coffee di benvenuto","nl":"Registratie & welkomstkoffie","fr":"Accueil et café de bienvenue"}', '{"en":"Badge collection, delegate pack, exhibition opens.","it":"Ritiro badge, kit congressuale, apertura dell''area espositiva.","nl":"Badge afhalen, deelnemerspakket, opening expositie.","fr":"Retrait des badges, pochette congressiste, ouverture de l''exposition."}', 0, 1);
@@ -216,8 +225,13 @@ INSERT INTO translations (tkey, value_json) VALUES ('reg.f.role', '{"en":"Role",
 INSERT INTO translations (tkey, value_json) VALUES ('reg.f.country', '{"en":"Country","it":"Paese","nl":"Land","fr":"Pays"}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.f.vat', '{"en":"VAT / Tax number","it":"Partita IVA / Codice fiscale","nl":"Btw-nummer","fr":"N° de TVA"}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.f.vatHint', '{"en":"Optional — for institutional invoicing","it":"Facoltativo — per la fatturazione istituzionale","nl":"Optioneel — voor institutionele facturatie","fr":"Facultatif — pour la facturation institutionnelle"}');
-INSERT INTO translations (tkey, value_json) VALUES ('reg.f.diet', '{"en":"Dietary requirements","it":"Esigenze alimentari","nl":"Dieetwensen","fr":"Régime alimentaire"}');
-INSERT INTO translations (tkey, value_json) VALUES ('reg.f.dietHint', '{"en":"Optional — allergies, vegetarian, vegan, other","it":"Facoltativo — allergie, vegetariano, vegano, altro","nl":"Optioneel — allergieën, vegetarisch, veganistisch, anders","fr":"Facultatif — allergies, végétarien, végan, autre"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.f.meal', '{"en":"Meal preference","it":"Preferenza per i pasti","nl":"Maaltijdvoorkeur","fr":"Préférence de repas"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.f.mealHint', '{"en":"So the caterer knows how many of each to prepare.","it":"Serve al catering per sapere quanti piatti preparare di ciascun tipo.","nl":"Zo weet de cateraar hoeveel er van elk moet worden bereid.","fr":"Le traiteur saura ainsi combien de plats préparer de chaque sorte."}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.f.mealPick', '{"en":"Choose a menu","it":"Scegli un menu","nl":"Kies een menu","fr":"Choisissez un menu"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.f.allerg', '{"en":"Allergies or intolerances","it":"Allergie o intolleranze","nl":"Allergieën of intoleranties","fr":"Allergies ou intolérances"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.f.allergHint', '{"en":"Only if you have any. Be specific — the kitchen needs to know exactly what to avoid.","it":"Solo se ne hai. Sii preciso: la cucina deve sapere esattamente cosa evitare.","nl":"Alleen als u die heeft. Wees precies: de keuken moet exact weten wat te vermijden.","fr":"Uniquement si vous en avez. Soyez précis : la cuisine doit savoir exactement quoi éviter."}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.f.allergConsent', '{"en":"I agree that this information, which concerns my health, is shared with the caterer for the meals at this meeting and deleted afterwards.","it":"Acconsento che questa informazione, che riguarda la mia salute, sia comunicata al servizio di ristorazione per i pasti di questo congresso e cancellata al termine.","nl":"Ik ga ermee akkoord dat deze informatie, die mijn gezondheid betreft, met de cateraar wordt gedeeld voor de maaltijden tijdens deze vergadering en daarna wordt gewist.","fr":"J''accepte que cette information, qui concerne ma santé, soit communiquée au traiteur pour les repas de ce congrès et supprimée ensuite."}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.f.allergNeeded', '{"en":"Please confirm the consent below to share your allergy information.","it":"Conferma il consenso qui sotto per comunicare le tue allergie.","nl":"Bevestig hieronder uw toestemming om uw allergie-informatie te delen.","fr":"Confirmez le consentement ci-dessous pour communiquer vos allergies."}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.f.rolePick', '{"en":"Select a role","it":"Seleziona un ruolo","nl":"Kies een functie","fr":"Choisir une fonction"}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.f.countryPick', '{"en":"Select a country","it":"Seleziona un paese","nl":"Kies een land","fr":"Choisir un pays"}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.roles.r0', '{"en":"Eye bank director","it":"Direttore banca degli occhi","nl":"Directeur oogbank","fr":"Directeur de banque d''yeux"}');
@@ -331,5 +345,5 @@ INSERT INTO translations (tkey, value_json) VALUES ('foot.terms', '{"en":"Terms"
 INSERT INTO translations (tkey, value_json) VALUES ('foot.cook', '{"en":"Cookies","it":"Cookie","nl":"Cookies","fr":"Cookies"}');
 INSERT INTO translations (tkey, value_json) VALUES ('foot.disc', '{"en":"Demo prototype. Programme, fees and deadlines are indicative and not an official EEBA publication.","it":"Prototipo dimostrativo. Programma, quote e scadenze sono indicativi e non costituiscono una pubblicazione ufficiale EEBA.","nl":"Demonstratieprototype. Programma, tarieven en deadlines zijn indicatief en vormen geen officiële EEBA-publicatie.","fr":"Prototype de démonstration. Programme, tarifs et échéances sont indicatifs et ne constituent pas une publication officielle de l''EEBA."}');
 
--- 250 chiavi di traduzione, 5 tariffe, 4 extra, 20 slot di programma.
+-- 255 chiavi di traduzione, 5 tariffe, 4 extra, 20 slot di programma.
 -- Nessun utente creato: il primo admin si registra da /admin (setup iniziale).

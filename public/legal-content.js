@@ -72,7 +72,8 @@ privacy: {
         en:`<table class="lg__t"><thead><tr><th>Data</th><th>Purpose</th><th>Legal basis</th></tr></thead><tbody>
             <tr><td>First and last name, email, institution, role, country</td><td>Managing your registration and admission to the meeting</td><td>Performance of a contract</td></tr>
             <tr><td>VAT or tax number, billing details</td><td>Issuing invoices and keeping accounting records</td><td>Legal obligation</td></tr>
-            <tr><td>Dietary requirements</td><td>Catering at the meeting</td><td>Your explicit consent</td></tr>
+            <tr><td>Meal preference (a choice from a menu)</td><td>Planning how many of each dish to prepare</td><td>Performance of a contract</td></tr>
+            <tr><td>Allergies and intolerances, if you tell us</td><td>Food safety at the meeting</td><td>Your explicit consent, asked separately</td></tr>
             <tr><td>Email address for the newsletter</td><td>News about EEBA meetings and webinars</td><td>Your consent, withdrawable at any time</td></tr>
             <tr><td>Technical logs (IP, browser, time)</td><td>Security of the service and abuse prevention</td><td>Legitimate interest</td></tr>
             </tbody></table>
@@ -80,7 +81,8 @@ privacy: {
         it:`<table class="lg__t"><thead><tr><th>Dati</th><th>Finalità</th><th>Base giuridica</th></tr></thead><tbody>
             <tr><td>Nome e cognome, email, ente, ruolo, paese</td><td>Gestione dell'iscrizione e accesso al congresso</td><td>Esecuzione di un contratto</td></tr>
             <tr><td>Partita IVA o codice fiscale, dati di fatturazione</td><td>Emissione delle fatture e scritture contabili</td><td>Obbligo di legge</td></tr>
-            <tr><td>Esigenze alimentari</td><td>Organizzazione della ristorazione</td><td>Tuo consenso esplicito</td></tr>
+            <tr><td>Preferenza per i pasti (scelta fra opzioni di menu)</td><td>Sapere quanti piatti preparare di ciascun tipo</td><td>Esecuzione di un contratto</td></tr>
+            <tr><td>Allergie e intolleranze, se ce le segnali</td><td>Sicurezza alimentare durante il congresso</td><td>Tuo consenso esplicito, richiesto a parte</td></tr>
             <tr><td>Email per la newsletter</td><td>Notizie sui congressi e i webinar EEBA</td><td>Tuo consenso, revocabile in ogni momento</td></tr>
             <tr><td>Log tecnici (indirizzo IP, browser, orario)</td><td>Sicurezza del servizio e prevenzione degli abusi</td><td>Legittimo interesse</td></tr>
             </tbody></table>
@@ -88,7 +90,8 @@ privacy: {
         nl:`<table class="lg__t"><thead><tr><th>Gegevens</th><th>Doel</th><th>Grondslag</th></tr></thead><tbody>
             <tr><td>Voor- en achternaam, e-mail, instelling, functie, land</td><td>Beheer van de inschrijving en toegang tot de vergadering</td><td>Uitvoering van een overeenkomst</td></tr>
             <tr><td>Btw-nummer, factuurgegevens</td><td>Facturatie en boekhouding</td><td>Wettelijke verplichting</td></tr>
-            <tr><td>Dieetwensen</td><td>Catering tijdens de vergadering</td><td>Uw uitdrukkelijke toestemming</td></tr>
+            <tr><td>Maaltijdvoorkeur (keuze uit een menu)</td><td>Bepalen hoeveel er van elk gerecht nodig is</td><td>Uitvoering van een overeenkomst</td></tr>
+            <tr><td>Allergieën en intoleranties, als u ze doorgeeft</td><td>Voedselveiligheid tijdens de vergadering</td><td>Uw uitdrukkelijke toestemming, apart gevraagd</td></tr>
             <tr><td>E-mailadres voor de nieuwsbrief</td><td>Nieuws over EEBA-vergaderingen en webinars</td><td>Uw toestemming, altijd intrekbaar</td></tr>
             <tr><td>Technische logs (IP, browser, tijdstip)</td><td>Beveiliging en misbruikpreventie</td><td>Gerechtvaardigd belang</td></tr>
             </tbody></table>
@@ -96,39 +99,48 @@ privacy: {
         fr:`<table class="lg__t"><thead><tr><th>Données</th><th>Finalité</th><th>Base légale</th></tr></thead><tbody>
             <tr><td>Nom, prénom, e-mail, établissement, fonction, pays</td><td>Gestion de l'inscription et accès au congrès</td><td>Exécution d'un contrat</td></tr>
             <tr><td>Numéro de TVA, données de facturation</td><td>Émission des factures et comptabilité</td><td>Obligation légale</td></tr>
-            <tr><td>Régime alimentaire</td><td>Organisation de la restauration</td><td>Votre consentement explicite</td></tr>
+            <tr><td>Préférence de repas (choix parmi des menus)</td><td>Savoir combien de plats préparer de chaque sorte</td><td>Exécution d'un contrat</td></tr>
+            <tr><td>Allergies et intolérances, si vous les signalez</td><td>Sécurité alimentaire pendant le congrès</td><td>Votre consentement explicite, demandé séparément</td></tr>
             <tr><td>E-mail pour la lettre d'information</td><td>Actualités des congrès et webinaires EEBA</td><td>Votre consentement, révocable à tout moment</td></tr>
             <tr><td>Journaux techniques (IP, navigateur, horodatage)</td><td>Sécurité du service et prévention des abus</td><td>Intérêt légitime</td></tr>
             </tbody></table>
             <p>Les données des deux premières lignes sont nécessaires à l'inscription. Le reste est facultatif.</p>` } },
 
-    { h: { en:"Dietary requirements", it:"Le esigenze alimentari",
-           nl:"Dieetwensen", fr:"Le régime alimentaire" },
+    { h: { en:"Meals and allergies", it:"Pasti e allergie",
+           nl:"Maaltijden en allergieën", fr:"Repas et allergies" },
       body: {
-        en:`<p>What you tell us about food can indirectly reveal a health condition or a
-            religious belief. European law treats these as special categories and protects
-            them more strictly.</p>
-            <p>We only use this information to organise catering, we share it with the caterer
-            in aggregate form wherever possible, and we delete it right after the meeting.
-            You are free to leave the field empty.</p>`,
-        it:`<p>Quello che ci dici sul cibo può rivelare indirettamente una condizione di salute
-            o una convinzione religiosa. La normativa europea considera questi dati come
-            categorie particolari e li protegge in modo più stringente.</p>
-            <p>Usiamo l'informazione solo per organizzare la ristorazione, la comunichiamo al
-            servizio di catering in forma aggregata quando possibile, e la cancelliamo subito
-            dopo il congresso. Sei libero di lasciare il campo vuoto.</p>`,
-        nl:`<p>Wat u over voeding doorgeeft kan indirect een gezondheidstoestand of een
-            geloofsovertuiging onthullen. De Europese wetgeving beschouwt dit als bijzondere
-            categorieën en beschermt het strenger.</p>
-            <p>We gebruiken deze informatie uitsluitend voor de catering, geven ze waar mogelijk
-            geaggregeerd door aan de cateraar, en wissen ze direct na de vergadering.
-            U mag het veld leeg laten.</p>`,
-        fr:`<p>Ce que vous indiquez sur l'alimentation peut révéler indirectement un état de
-            santé ou une conviction religieuse. Le droit européen y voit des catégories
-            particulières et les protège plus strictement.</p>
-            <p>Nous utilisons cette information uniquement pour la restauration, la transmettons
-            au traiteur sous forme agrégée lorsque c'est possible, et la supprimons juste après
-            le congrès. Vous pouvez laisser le champ vide.</p>` } },
+        en:`<p>Choosing a menu is an order, not a statement about yourself: we know how many
+            vegetarian dishes to prepare, not why you picked one. That is deliberate — a free
+            text field would have collected far more than we need.</p>
+            <p>Allergies are different. The kitchen has to know precisely what to avoid, so that
+            information does concern your health. We ask for it separately, only from those who
+            have something to report, with a consent we request explicitly. It goes to the
+            caterer and is deleted right after the meeting.</p>
+            <p>Both fields are optional.</p>`,
+        it:`<p>Scegliere un menu è un'ordinazione, non una dichiarazione su di sé: sappiamo
+            quanti piatti vegetariani preparare, non perché tu ne abbia scelto uno. È una scelta
+            voluta — una casella di testo libero avrebbe raccolto molto più del necessario.</p>
+            <p>Le allergie sono un'altra cosa. La cucina deve sapere con precisione cosa evitare,
+            quindi quell'informazione riguarda davvero la tua salute. Te la chiediamo a parte,
+            solo se hai qualcosa da segnalare, con un consenso richiesto esplicitamente. Viene
+            comunicata al servizio di ristorazione e cancellata subito dopo il congresso.</p>
+            <p>Entrambi i campi sono facoltativi.</p>`,
+        nl:`<p>Een menu kiezen is een bestelling, geen verklaring over uzelf: wij weten hoeveel
+            vegetarische gerechten nodig zijn, niet waarom u dat koos. Dat is bewust — een vrij
+            tekstveld zou veel meer hebben verzameld dan nodig.</p>
+            <p>Allergieën liggen anders. De keuken moet precies weten wat te vermijden, dus die
+            informatie betreft wel uw gezondheid. We vragen ze apart, alleen aan wie iets te
+            melden heeft, met een uitdrukkelijk gevraagde toestemming. Ze gaat naar de cateraar
+            en wordt direct na de vergadering gewist.</p>
+            <p>Beide velden zijn optioneel.</p>`,
+        fr:`<p>Choisir un menu est une commande, pas une déclaration sur soi : nous savons
+            combien de plats végétariens préparer, pas pourquoi vous en avez choisi un. C'est
+            délibéré — un champ libre aurait recueilli bien plus que nécessaire.</p>
+            <p>Les allergies, c'est différent. La cuisine doit savoir précisément quoi éviter :
+            cette information concerne bien votre santé. Nous la demandons séparément, uniquement
+            à qui a quelque chose à signaler, avec un consentement demandé explicitement. Elle
+            est transmise au traiteur et supprimée juste après le congrès.</p>
+            <p>Les deux champs sont facultatifs.</p>` } },
 
     { h: { en:"Who else sees your data", it:"Chi altro vede i tuoi dati",
            nl:"Wie uw gegevens nog meer ziet", fr:"Qui d'autre voit vos données" },
@@ -155,22 +167,22 @@ privacy: {
       body: {
         en:`<ul><li>Registration data: until the end of the meeting, then for the period required to handle any disputes.</li>
             <li>Invoices and accounting records: ten years, as required by law.</li>
-            <li>Dietary requirements: deleted immediately after the meeting.</li>
+            <li>Meal preference and allergies: deleted immediately after the meeting.</li>
             <li>Newsletter: until you unsubscribe.</li>
             <li>Technical logs: a few months.</li></ul>`,
         it:`<ul><li>Dati di iscrizione: fino alla conclusione del congresso, poi per il tempo necessario a gestire eventuali contestazioni.</li>
             <li>Fatture e scritture contabili: dieci anni, come impone la legge.</li>
-            <li>Esigenze alimentari: cancellate subito dopo il congresso.</li>
+            <li>Preferenza per i pasti e allergie: cancellate subito dopo il congresso.</li>
             <li>Newsletter: finché non ti disiscrivi.</li>
             <li>Log tecnici: pochi mesi.</li></ul>`,
         nl:`<ul><li>Inschrijvingsgegevens: tot het einde van de vergadering, daarna zolang nodig voor eventuele geschillen.</li>
             <li>Facturen en boekhouding: tien jaar, zoals wettelijk vereist.</li>
-            <li>Dieetwensen: direct na de vergadering gewist.</li>
+            <li>Maaltijdvoorkeur en allergieën: direct na de vergadering gewist.</li>
             <li>Nieuwsbrief: tot u zich uitschrijft.</li>
             <li>Technische logs: enkele maanden.</li></ul>`,
         fr:`<ul><li>Données d'inscription : jusqu'à la fin du congrès, puis le temps nécessaire au traitement d'éventuels litiges.</li>
             <li>Factures et pièces comptables : dix ans, comme l'exige la loi.</li>
-            <li>Régime alimentaire : supprimé juste après le congrès.</li>
+            <li>Préférence de repas et allergies : supprimées juste après le congrès.</li>
             <li>Lettre d'information : jusqu'à votre désinscription.</li>
             <li>Journaux techniques : quelques mois.</li></ul>` } },
 

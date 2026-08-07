@@ -309,7 +309,18 @@
               <div class="field"><label for="country"><span data-i18n="reg.f.country"></span> <span class="req">*</span></label><select id="country" name="country" required></select><span class="msg"></span></div>
             </div>
             <div class="field"><label for="vat"><span data-i18n="reg.f.vat"></span></label><input id="vat" name="vat"><span class="small" data-i18n="reg.f.vatHint" style="display:block;margin-top:6px"></span></div>
-            <div class="field"><label for="diet"><span data-i18n="reg.f.diet"></span></label><input id="diet" name="diet"><span class="small" data-i18n="reg.f.dietHint" style="display:block;margin-top:6px"></span></div>
+            <div class="field" id="mealField"><label for="meal"><span data-i18n="reg.f.meal"></span></label><select id="meal" name="meal"></select><span class="small" data-i18n="reg.f.mealHint" style="display:block;margin-top:6px"></span></div>
+
+            <!-- Le allergie sono dati sanitari: il consenso compare solo a chi
+                 compila il campo, invece di appesantire il modulo per tutti. -->
+            <div class="field" id="allergField"><label for="allergies"><span data-i18n="reg.f.allerg"></span></label>
+              <textarea id="allergies" name="allergies" rows="2"></textarea>
+              <span class="small" data-i18n="reg.f.allergHint" style="display:block;margin-top:6px"></span>
+              <div id="allergConsentBox" class="hidden" style="margin-top:12px">
+                <label class="checkline"><input type="checkbox" id="k4"><span data-i18n="reg.f.allergConsent"></span></label>
+                <p class="small" id="err3" style="color:#C4362F;display:none;margin:0"></p>
+              </div>
+            </div>
 
             <div style="margin-top:24px">
               <label class="checkline"><input type="checkbox" id="k1"><span data-i18n="reg.consent1"></span></label>

@@ -96,6 +96,15 @@ CREATE TABLE IF NOT EXISTS addons (
   updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS meals (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  code       TEXT    NOT NULL UNIQUE,
+  name_json  TEXT    NOT NULL DEFAULT '{}',
+  sort       INTEGER NOT NULL DEFAULT 0,
+  active     INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 -- ------------------------------------------------------------ TRADUZIONI
 -- Override delle stringhe statiche di i18n.js. Chiave = percorso puntato
 -- (es. "hero.t1"). Se una chiave non c'è qui, il sito usa i18n.js.
@@ -123,7 +132,9 @@ CREATE TABLE IF NOT EXISTS registrations (
   role           TEXT,
   country        TEXT,
   vat            TEXT,
-  diet           TEXT,
+  meal           TEXT,                        -- codice da meals
+  allergies      TEXT,                        -- testo libero, dato sanitario
+  allergies_ok   INTEGER NOT NULL DEFAULT 0,  -- consenso esplicito, art. 9
   lang           TEXT    NOT NULL DEFAULT 'en',
   tier_code      TEXT    NOT NULL,
   tier_price     INTEGER NOT NULL DEFAULT 0,  -- centesimi, calcolato lato server
@@ -131,11 +142,14 @@ CREATE TABLE IF NOT EXISTS registrations (
   addons_total   INTEGER NOT NULL DEFAULT 0,
   total          INTEGER NOT NULL DEFAULT 0,
   currency       TEXT    NOT NULL DEFAULT 'EUR',
-  payment_method TEXT    NOT NULL DEFAULT 'card'
-                 CHECK (payment_method IN ('card','sepa','inv')),
+  payment_method TEXT    NOT NULL DEFAULT 'card',   -- vedi METHODS in src/api.js
   payment_status TEXT    NOT NULL DEFAULT 'pending'
-                 CHECK (payment_status IN ('pending','paid','refunded','cancelled')),
+                 CHECK (payment_status IN ('pending','paid','refunded','cancelled','failed')),
+  provider       TEXT,                       -- stripe | preview | manual
+  session_id     TEXT,                       -- sessione di checkout del processore
+  intent_id      TEXT,                       -- pagamento vero e proprio
   paid_at        TEXT,
+  refunded_at    TEXT,
   newsletter     INTEGER NOT NULL DEFAULT 0,
   notes          TEXT,
   source         TEXT    NOT NULL DEFAULT 'web',
@@ -146,6 +160,23 @@ CREATE INDEX IF NOT EXISTS idx_reg_created ON registrations(created_at);
 CREATE INDEX IF NOT EXISTS idx_reg_status  ON registrations(payment_status);
 CREATE INDEX IF NOT EXISTS idx_reg_email   ON registrations(email);
 CREATE INDEX IF NOT EXISTS idx_reg_tier    ON registrations(tier_code);
+CREATE INDEX IF NOT EXISTS idx_reg_session ON registrations(session_id);
+CREATE INDEX IF NOT EXISTS idx_reg_meal    ON registrations(meal);
+
+-- Eventi ricevuti dal processore: evitano di elaborare due volte lo stesso
+-- webhook e lasciano traccia se un pagamento non torna.
+CREATE TABLE IF NOT EXISTS payment_events (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  provider   TEXT NOT NULL,
+  event_id   TEXT NOT NULL,
+  event_type TEXT,
+  ref        TEXT,
+  status     TEXT,
+  payload    TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (provider, event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_payevents_ref ON payment_events(ref);
 
 -- ----------------------------------------------------------------- AUDIT
 CREATE TABLE IF NOT EXISTS audit_log (

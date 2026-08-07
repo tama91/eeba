@@ -51,7 +51,8 @@ const settings = {
   payments_mode:    "preview",
   payments_methods: "card,bancontact,ideal,paypal,revolut_pay,sepa,inv",
   payments_currency:"EUR",
-  invoice_note:     ""
+  invoice_note:     "",
+  meals_enabled:    "1"
 };
 for (const [k, v] of Object.entries(settings)) {
   W(`INSERT INTO settings (skey, svalue) VALUES (${q(k)}, ${q(v)});`);
@@ -73,6 +74,20 @@ PRICING.addons.forEach((a, i) => {
   const cap = a.id === "lab" ? 24 : "NULL";
   W(`INSERT INTO addons (code, price, capacity, name_json, desc_json, sort, active) VALUES (` +
     `${q(a.id)}, ${a.price * 100}, ${cap}, ${json(name)}, ${json(desc)}, ${i}, 1);`);
+});
+
+/* ------------------------------------------------------------------- MENU */
+W("\nDELETE FROM meals;");
+const MEALS = [
+  ["standard",    { en:"Standard menu", it:"Menu standard", nl:"Standaardmenu", fr:"Menu standard" }],
+  ["vegetarian",  { en:"Vegetarian", it:"Vegetariano", nl:"Vegetarisch", fr:"Végétarien" }],
+  ["vegan",       { en:"Vegan", it:"Vegano", nl:"Veganistisch", fr:"Végétalien" }],
+  ["gluten_free", { en:"Gluten free", it:"Senza glutine", nl:"Glutenvrij", fr:"Sans gluten" }],
+  ["no_pork",     { en:"No pork", it:"Senza maiale", nl:"Zonder varkensvlees", fr:"Sans porc" }],
+  ["fish",        { en:"Fish", it:"Pesce", nl:"Vis", fr:"Poisson" }]
+];
+MEALS.forEach(([code, name], i) => {
+  W(`INSERT INTO meals (code, name_json, sort, active) VALUES (${q(code)}, ${json(name)}, ${i}, 1);`);
 });
 
 /* ---------------------------------------------------------------- PROGRAMMA */
@@ -157,6 +172,11 @@ U("-- ==========================================================================
 U("-- Impostazioni introdotte dopo il primo avvio");
 for (const [k, v] of Object.entries(settings))
   U(`INSERT OR IGNORE INTO settings (skey, svalue) VALUES (${q(k)}, ${q(v)});`);
+
+U("\n-- Opzioni di menu introdotte con la migrazione 003");
+MEALS.forEach(([code, name], i) => {
+  U(`INSERT OR IGNORE INTO meals (code, name_json, sort, active) VALUES (${q(code)}, ${json(name)}, ${i}, 1);`);
+});
 
 U("\n-- Chiavi di traduzione nuove; quelle già presenti non vengono toccate");
 keys.forEach(k => {

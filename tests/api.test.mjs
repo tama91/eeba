@@ -8,12 +8,13 @@
    ========================================================================== */
 
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const read = p => readFileSync(join(ROOT, p), "utf8");
 
 /* ------------------------------------------------- shim del binding D1 */
 class Stmt {
@@ -33,10 +34,9 @@ function makeDB() {
   const db = new DatabaseSync(":memory:");
   db.exec(readFileSync(join(ROOT, "schema/schema.sql"), "utf8"));
   db.exec(readFileSync(join(ROOT, "schema/seed.sql"), "utf8"));
-  // Le migrazioni girano dopo, come in un aggiornamento reale: così il test
-  // verifica anche che siano applicabili e che non calpestino il seed.
-  for (const m of ["001-flexible-days-theme.sql", "002-payments.sql"])
-    db.exec(readFileSync(join(ROOT, "schema/migrations", m), "utf8"));
+  /* Niente migrazioni qui: schema.sql è già lo stato corrente, quello con cui
+     nasce un'installazione nuova. Le migrazioni servono a portare avanti un
+     database vecchio, e vengono provate a parte — gruppo "Migrazioni". */
   return {
     _raw: db,
     prepare: sql => new Stmt(db, sql),
@@ -575,6 +575,74 @@ group("Pagamenti — configurazione dal backoffice");
   check("elenco eventi accessibile", r.status === 200 && Array.isArray(r.data.results), r.status);
 }
 
+group("Menu e allergie");
+{
+  let r = await call("/public/content", { useCookie: false });
+  check("le opzioni di menu arrivano al sito", (r.data.meals || []).length === 6, (r.data.meals || []).length);
+  check("i nomi dei menu sono tradotti",
+    r.data.meals.every(m => m.name_json.it && m.name_json.nl), JSON.stringify(r.data.meals[0]));
+
+  const base = { first_name:"Marie", last_name:"Claes", email:"marie@uz.be", org:"UZ",
+                 tier_code:"tra", payment_method:"inv", consent_terms:true, consent_gdpr:true };
+
+  r = await call("/public/register", { method:"POST", useCookie:false,
+    body:{ ...base, meal:"vegetarian" } });
+  check("iscrizione con scelta del menu", r.status === 201, JSON.stringify(r.data));
+  let row = DB._raw.prepare("SELECT meal, allergies, allergies_ok FROM registrations WHERE email='marie@uz.be'").get();
+  check("il menu è salvato come codice", row.meal === "vegetarian", JSON.stringify(row));
+  check("nessuna allergia, nessun consenso registrato", !row.allergies && row.allergies_ok === 0);
+
+  r = await call("/public/register", { method:"POST", useCookie:false,
+    body:{ ...base, email:"finto@x.it", meal:"menu_inventato" } });
+  check("un menu inesistente non viene accettato", r.status === 201);
+  row = DB._raw.prepare("SELECT meal FROM registrations WHERE email='finto@x.it'").get();
+  check("e viene salvato vuoto invece che alla cieca", row.meal === null, String(row.meal));
+
+  // il punto centrale: allergie senza consenso esplicito vengono rifiutate
+  r = await call("/public/register", { method:"POST", useCookie:false,
+    body:{ ...base, email:"nocons@x.it", allergies:"arachidi, shock anafilattico" } });
+  check("allergie senza consenso → 400", r.status === 400 && r.data.field === "allergies_consent",
+        JSON.stringify(r.data));
+  const none = DB._raw.prepare("SELECT COUNT(*) AS n FROM registrations WHERE email='nocons@x.it'").get();
+  check("e l'iscrizione non viene creata a metà", none.n === 0, none.n);
+
+  r = await call("/public/register", { method:"POST", useCookie:false,
+    body:{ ...base, email:"cons@x.it", meal:"gluten_free",
+           allergies:"arachidi", allergies_consent:true } });
+  check("con consenso esplicito l'iscrizione passa", r.status === 201, JSON.stringify(r.data));
+  row = DB._raw.prepare("SELECT allergies, allergies_ok FROM registrations WHERE email='cons@x.it'").get();
+  check("allergie salvate con il consenso tracciato",
+        row.allergies === "arachidi" && row.allergies_ok === 1, JSON.stringify(row));
+
+  // conteggi per la ristorazione
+  r = await call("/admin/stats");
+  check("le statistiche contano i menu", (r.data.meals || []).length >= 2, JSON.stringify(r.data.meals));
+  check("le statistiche elencano chi ha allergie",
+        (r.data.allergies || []).some(a => a.allergies === "arachidi"), JSON.stringify(r.data.allergies));
+
+  // filtro e export per menu
+  r = await call("/admin/registrations?meal=vegetarian");
+  check("filtro per menu", r.data.total === 1, r.data.total);
+  r = await call("/admin/registrations/export.csv?meal=gluten_free");
+  check("export filtrato per menu", String(r.data).split("\r\n").length - 1 === 1,
+        String(r.data).split("\r\n").length - 1);
+  check("il CSV contiene menu e allergie", /meal;allergies/.test(String(r.data)), String(r.data).slice(0, 90));
+
+  // le opzioni di menu si gestiscono dal backoffice
+  r = await call("/admin/meals", { method:"POST", body:{
+    code:"lactose_free", sort:9, active:1,
+    name_json:{ en:"Lactose free", it:"Senza lattosio", nl:"Lactosevrij", fr:"Sans lactose" } } });
+  check("nuova opzione di menu creata", r.status === 201, JSON.stringify(r.data));
+  r = await call("/public/content", { useCookie: false });
+  check("compare subito sul sito", r.data.meals.some(m => m.code === "lactose_free"));
+
+  // si può spegnere del tutto
+  await call("/admin/settings", { method:"PATCH", body:{ meals_enabled:"0" } });
+  r = await call("/public/content", { useCookie: false });
+  check("con meals_enabled a 0 il sito non li chiede", r.data.meals.length === 0, r.data.meals.length);
+  await call("/admin/settings", { method:"PATCH", body:{ meals_enabled:"1" } });
+}
+
 group("Cambio password e chiusura sessione");
 {
   let r = await call("/auth/password", { method: "POST", body: { current: "sbagliata", next: "nuovaPasswordOk1" } });
@@ -589,6 +657,85 @@ group("Cambio password e chiusura sessione");
   cookie = "";
   r = await call("/admin/stats", { useCookie: false });
   check("dopo il logout l'admin è chiuso", r.status === 401, r.status);
+}
+
+group("Migrazioni su un database preesistente");
+{
+  /* Le migrazioni non si possono provare sopra schema.sql, che è già allo
+     stato finale: si ricrea la forma vecchia della tabella e si verifica che
+     il passaggio porti i dati dove deve. Il punto delicato della 003 è che il
+     vecchio campo libero finisca fra le allergie senza consenso registrato,
+     invece di sparire o di risultare consentito. */
+  const old = new DatabaseSync(":memory:");
+  old.exec(`
+    CREATE TABLE settings (skey TEXT PRIMARY KEY, svalue TEXT NOT NULL,
+                           updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+    CREATE TABLE registrations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, ref TEXT NOT NULL UNIQUE,
+      first_name TEXT NOT NULL, last_name TEXT NOT NULL, email TEXT NOT NULL,
+      org TEXT NOT NULL DEFAULT '', role TEXT, country TEXT, vat TEXT, diet TEXT,
+      lang TEXT NOT NULL DEFAULT 'en', tier_code TEXT NOT NULL,
+      tier_price INTEGER NOT NULL DEFAULT 0, addons_json TEXT NOT NULL DEFAULT '[]',
+      addons_total INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'EUR', payment_method TEXT NOT NULL DEFAULT 'card',
+      payment_status TEXT NOT NULL DEFAULT 'pending', provider TEXT, session_id TEXT,
+      intent_id TEXT, paid_at TEXT, refunded_at TEXT, newsletter INTEGER NOT NULL DEFAULT 0,
+      notes TEXT, source TEXT NOT NULL DEFAULT 'web',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+    INSERT INTO registrations (ref, first_name, last_name, email, tier_code, diet)
+      VALUES ('EEBA27-OLD1','Vecchia','Iscrizione','v@x.it','mem','celiaca, niente glutine');
+    INSERT INTO registrations (ref, first_name, last_name, email, tier_code, diet)
+      VALUES ('EEBA27-OLD2','Senza','Note','s@x.it','tra',NULL);`);
+
+  let ok = true, why = "";
+  try { old.exec(readFileSync(join(ROOT, "schema/migrations/003-meals.sql"), "utf8")); }
+  catch (e) { ok = false; why = e.message; }
+  check("la 003 si applica su un database con il vecchio campo diet", ok, why);
+
+  if (ok) {
+    const r1 = old.prepare("SELECT allergies, allergies_ok, meal FROM registrations WHERE ref='EEBA27-OLD1'").get();
+    check("il vecchio testo libero diventa allergie", r1.allergies === "celiaca, niente glutine", JSON.stringify(r1));
+    check("senza consenso registrato, da riverificare", r1.allergies_ok === 0, String(r1.allergies_ok));
+    check("il menu resta da scegliere", r1.meal === null, String(r1.meal));
+
+    const r2 = old.prepare("SELECT allergies FROM registrations WHERE ref='EEBA27-OLD2'").get();
+    check("chi non aveva scritto niente resta vuoto", r2.allergies === null, String(r2.allergies));
+
+    const n = old.prepare("SELECT COUNT(*) AS n FROM registrations").get();
+    check("nessuna riga persa nel passaggio", n.n === 2, n.n);
+    const meals = old.prepare("SELECT COUNT(*) AS n FROM meals").get();
+    check("le opzioni di menu vengono create", meals.n === 6, meals.n);
+
+    /* La 003 sposta dati da una colonna che poi sparisce: rilanciarla non ha
+       senso, e infatti fallisce. È il comportamento giusto — se fosse
+       "ripetibile" ignorando l'errore, la seconda esecuzione sovrascriverebbe
+       le allergie con dei vuoti. Meglio un errore rumoroso che una perdita
+       silenziosa. */
+    let twice = true, why2 = "";
+    try { old.exec(readFileSync(join(ROOT, "schema/migrations/003-meals.sql"), "utf8")); }
+    catch (e) { twice = false; why2 = e.message; }
+    check("rilanciarla si ferma con un errore invece di svuotare le allergie",
+          !twice && /diet/.test(why2), why2 || "è passata due volte");
+    const still = old.prepare("SELECT allergies FROM registrations WHERE ref='EEBA27-OLD1'").get();
+    check("e i dati restano intatti dopo il tentativo",
+          still.allergies === "celiaca, niente glutine", String(still.allergies));
+  }
+
+  /* Ogni migrazione dev'essere collegata agli script npm: dimenticarlo
+     significa che su un database esistente non verrà mai applicata. */
+  {
+    const pkg = JSON.parse(read("package.json"));
+    const files = readdirSync(join(ROOT, "schema/migrations")).filter(f => f.endsWith(".sql")).sort();
+    const wired = files.filter(f => pkg.scripts["db:migrate"].includes(f));
+    check(`tutte le ${files.length} migrazioni sono in db:migrate`,
+          wired.length === files.length, files.filter(f => !wired.includes(f)).join(", "));
+    const documented = read("schema/migrations/README.md");
+    const undoc = files.filter(f => !documented.includes(f));
+    check("tutte sono elencate nel README", undoc.length === 0, undoc.join(", "));
+  }
+
+  old.close();
 }
 
 group("Endpoint inesistenti");

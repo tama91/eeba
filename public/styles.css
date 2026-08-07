@@ -605,3 +605,6 @@ html[data-theme="dark"] .theme .sun{ display:none; }
 .pay__ico{ width:22px; flex:none; color:var(--ink-45); display:block; }
 .pay__ico svg{ width:22px; height:22px; }
 .addon.is-sel .pay__ico{ color:var(--accent); }
+
+/* Blocco del consenso per le allergie: compare solo quando serve */
+.hidden{ display:none !important; }

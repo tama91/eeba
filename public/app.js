@@ -18,7 +18,7 @@ let T = I18N.en;
 /* Contenuti caricati dal backoffice. Se l'API non risponde il sito continua
    a funzionare con i valori di i18n.js: nessuna schermata bianca. */
 const DATA = { live: false, settings: {}, payments: null, programme: null,
-               speakers: null, sponsors: null, tiers: null, addons: null };
+               speakers: null, sponsors: null, tiers: null, addons: null, meals: null };
 
 const pick = obj => (obj && (obj[lang] || obj.en || Object.values(obj).find(Boolean))) || "";
 
@@ -65,6 +65,7 @@ async function hydrate() {
     DATA.sponsors  = d.sponsors || null;
     DATA.tiers     = (d.tiers && d.tiers.length) ? d.tiers : null;
     DATA.addons    = (d.addons && d.addons.length) ? d.addons : null;
+    DATA.meals     = Array.isArray(d.meals) ? d.meals : null;
     DATA.live = true;
 
     if (DATA.settings.event_start) {
@@ -428,6 +429,18 @@ function renderFormOptions() {
     Number(a[0].slice(1)) - Number(b[0].slice(1)));
   role.innerHTML = `<option value="">${T.reg.f.rolePick}</option>` +
     roles.map(([code, label]) => `<option value="${code}">${label}</option>`).join("");
+
+  /* Scelta del menu: opzioni dal database. Se l'edizione non prevede pasti,
+     la sezione sparisce insieme a quella delle allergie. */
+  const mealSel = $("#meal");
+  const mv = mealSel.value;
+  const meals = DATA.meals || [];
+  const noMeals = DATA.settings.meals_enabled === "0" || (DATA.live && !meals.length);
+  $("#mealField").classList.toggle("hidden", noMeals);
+  $("#allergField").classList.toggle("hidden", noMeals);
+  mealSel.innerHTML = `<option value="">${T.reg.f.mealPick}</option>` +
+    meals.map(m => `<option value="${m.code}">${pick(m.name_json)}</option>`).join("");
+  mealSel.value = mv;
   country.innerHTML = `<option value="">${T.reg.f.countryPick}</option>` + COUNTRIES.map(c => `<option value="${c}">${c}</option>`).join("");
   role.value = rv; country.value = cv;
 }
@@ -501,6 +514,12 @@ function validateForm() {
   if (!$("#k1").checked || !$("#k2").checked) { e2.textContent = T.reg.errConsent; e2.style.display = "block"; ok = false; }
   else e2.style.display = "none";
 
+  // allergie scritte senza consenso: si blocca invece di scartarle in silenzio
+  const e3 = $("#err3");
+  if ($("#allergies").value.trim() && !$("#k4").checked) {
+    e3.textContent = T.reg.f.allergNeeded; e3.style.display = "block"; ok = false;
+  } else e3.style.display = "none";
+
   if (!ok) { const first = $(".field.has-err input, .field.has-err select"); if (first) first.focus(); }
   return ok;
 }
@@ -517,7 +536,9 @@ async function completeBooking() {
     role:       $("#role").value || null,   // codice stabile, non l'etichetta tradotta
     country:    $("#country").value || null,
     vat:        $("#vat").value.trim() || null,
-    diet:       $("#diet").value.trim() || null,
+    meal:       $("#meal").value || null,
+    allergies:  $("#allergies").value.trim() || null,
+    allergies_consent: $("#k4").checked,
     lang,
     tier_code:  state.tier,
     addons:     [...state.addons],
@@ -691,6 +712,14 @@ async function init() {
   $("#payBtn").addEventListener("click", completeBooking);
   $("#resetBtn").addEventListener("click", resetBooking);
   $("#icsBtn").addEventListener("click", downloadIcs);
+
+  /* Il consenso per le allergie compare solo a chi scrive qualcosa: chi non
+     ha allergie non deve nemmeno vedersi chiedere un consenso sanitario. */
+  $("#allergies").addEventListener("input", e => {
+    const has = !!e.target.value.trim();
+    $("#allergConsentBox").classList.toggle("hidden", !has);
+    if (!has) { $("#k4").checked = false; $("#err3").style.display = "none"; }
+  });
 
   await hydrate();
   applyTheme(DATA.settings);

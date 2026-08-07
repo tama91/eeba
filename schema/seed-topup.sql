@@ -25,6 +25,15 @@ INSERT OR IGNORE INTO settings (skey, svalue) VALUES ('payments_mode', 'preview'
 INSERT OR IGNORE INTO settings (skey, svalue) VALUES ('payments_methods', 'card,bancontact,ideal,paypal,revolut_pay,sepa,inv');
 INSERT OR IGNORE INTO settings (skey, svalue) VALUES ('payments_currency', 'EUR');
 INSERT OR IGNORE INTO settings (skey, svalue) VALUES ('invoice_note', '');
+INSERT OR IGNORE INTO settings (skey, svalue) VALUES ('meals_enabled', '1');
+
+-- Opzioni di menu introdotte con la migrazione 003
+INSERT OR IGNORE INTO meals (code, name_json, sort, active) VALUES ('standard', '{"en":"Standard menu","it":"Menu standard","nl":"Standaardmenu","fr":"Menu standard"}', 0, 1);
+INSERT OR IGNORE INTO meals (code, name_json, sort, active) VALUES ('vegetarian', '{"en":"Vegetarian","it":"Vegetariano","nl":"Vegetarisch","fr":"Végétarien"}', 1, 1);
+INSERT OR IGNORE INTO meals (code, name_json, sort, active) VALUES ('vegan', '{"en":"Vegan","it":"Vegano","nl":"Veganistisch","fr":"Végétalien"}', 2, 1);
+INSERT OR IGNORE INTO meals (code, name_json, sort, active) VALUES ('gluten_free', '{"en":"Gluten free","it":"Senza glutine","nl":"Glutenvrij","fr":"Sans gluten"}', 3, 1);
+INSERT OR IGNORE INTO meals (code, name_json, sort, active) VALUES ('no_pork', '{"en":"No pork","it":"Senza maiale","nl":"Zonder varkensvlees","fr":"Sans porc"}', 4, 1);
+INSERT OR IGNORE INTO meals (code, name_json, sort, active) VALUES ('fish', '{"en":"Fish","it":"Pesce","nl":"Vis","fr":"Poisson"}', 5, 1);
 
 -- Chiavi di traduzione nuove; quelle già presenti non vengono toccate
 INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('meta.title', '{"en":"EEBA 2027 — XXXVIII Annual Meeting · Leuven, 8–10 April 2027","it":"EEBA 2027 — XXXVIII Congresso Annuale · Lovanio, 8–10 aprile 2027","nl":"EEBA 2027 — XXXVIIIe Jaarvergadering · Leuven, 8–10 april 2027","fr":"EEBA 2027 — XXXVIIIe Congrès annuel · Louvain, 8–10 avril 2027"}');
@@ -163,8 +172,13 @@ INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.role', '{"e
 INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.country', '{"en":"Country","it":"Paese","nl":"Land","fr":"Pays"}');
 INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.vat', '{"en":"VAT / Tax number","it":"Partita IVA / Codice fiscale","nl":"Btw-nummer","fr":"N° de TVA"}');
 INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.vatHint', '{"en":"Optional — for institutional invoicing","it":"Facoltativo — per la fatturazione istituzionale","nl":"Optioneel — voor institutionele facturatie","fr":"Facultatif — pour la facturation institutionnelle"}');
-INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.diet', '{"en":"Dietary requirements","it":"Esigenze alimentari","nl":"Dieetwensen","fr":"Régime alimentaire"}');
-INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.dietHint', '{"en":"Optional — allergies, vegetarian, vegan, other","it":"Facoltativo — allergie, vegetariano, vegano, altro","nl":"Optioneel — allergieën, vegetarisch, veganistisch, anders","fr":"Facultatif — allergies, végétarien, végan, autre"}');
+INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.meal', '{"en":"Meal preference","it":"Preferenza per i pasti","nl":"Maaltijdvoorkeur","fr":"Préférence de repas"}');
+INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.mealHint', '{"en":"So the caterer knows how many of each to prepare.","it":"Serve al catering per sapere quanti piatti preparare di ciascun tipo.","nl":"Zo weet de cateraar hoeveel er van elk moet worden bereid.","fr":"Le traiteur saura ainsi combien de plats préparer de chaque sorte."}');
+INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.mealPick', '{"en":"Choose a menu","it":"Scegli un menu","nl":"Kies een menu","fr":"Choisissez un menu"}');
+INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.allerg', '{"en":"Allergies or intolerances","it":"Allergie o intolleranze","nl":"Allergieën of intoleranties","fr":"Allergies ou intolérances"}');
+INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.allergHint', '{"en":"Only if you have any. Be specific — the kitchen needs to know exactly what to avoid.","it":"Solo se ne hai. Sii preciso: la cucina deve sapere esattamente cosa evitare.","nl":"Alleen als u die heeft. Wees precies: de keuken moet exact weten wat te vermijden.","fr":"Uniquement si vous en avez. Soyez précis : la cuisine doit savoir exactement quoi éviter."}');
+INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.allergConsent', '{"en":"I agree that this information, which concerns my health, is shared with the caterer for the meals at this meeting and deleted afterwards.","it":"Acconsento che questa informazione, che riguarda la mia salute, sia comunicata al servizio di ristorazione per i pasti di questo congresso e cancellata al termine.","nl":"Ik ga ermee akkoord dat deze informatie, die mijn gezondheid betreft, met de cateraar wordt gedeeld voor de maaltijden tijdens deze vergadering en daarna wordt gewist.","fr":"J''accepte que cette information, qui concerne ma santé, soit communiquée au traiteur pour les repas de ce congrès et supprimée ensuite."}');
+INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.allergNeeded', '{"en":"Please confirm the consent below to share your allergy information.","it":"Conferma il consenso qui sotto per comunicare le tue allergie.","nl":"Bevestig hieronder uw toestemming om uw allergie-informatie te delen.","fr":"Confirmez le consentement ci-dessous pour communiquer vos allergies."}');
 INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.rolePick', '{"en":"Select a role","it":"Seleziona un ruolo","nl":"Kies een functie","fr":"Choisir une fonction"}');
 INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.f.countryPick', '{"en":"Select a country","it":"Seleziona un paese","nl":"Kies een land","fr":"Choisir un pays"}');
 INSERT OR IGNORE INTO translations (tkey, value_json) VALUES ('reg.roles.r0', '{"en":"Eye bank director","it":"Direttore banca degli occhi","nl":"Directeur oogbank","fr":"Directeur de banque d''yeux"}');
