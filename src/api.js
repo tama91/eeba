@@ -19,7 +19,11 @@ const json = (data, status = 200, headers = {}) =>
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers }
   });
 
-const err = (status, message, extra = {}) => json({ error: message, ...extra }, status);
+/* Un errore porta con sé un codice stabile. Il testo qui è solo una riserva:
+   la frase che legge la segreteria arriva dal catalogo in admin/errors.js,
+   dove si può riscrivere senza toccare il server. */
+const err = (status, code, message, extra = {}) =>
+  json({ error: message, code, ...extra }, status);
 
 const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
@@ -90,6 +94,35 @@ async function audit(env, user, action, entity, entityId, detail) {
       .bind(user?.id ?? null, user?.email ?? null, action, entity, entityId ? String(entityId) : null,
             detail ? String(detail).slice(0, 500) : null).run();
   } catch { /* l'audit non deve mai far fallire la richiesta */ }
+}
+
+/* Gli errori del database non devono mai arrivare a schermo come li scrive
+   SQLite. "UNIQUE constraint failed: meals.code" dice tutto a chi ha scritto
+   il codice e niente a chi sta compilando un modulo: qui diventa un codice
+   che il backoffice sa tradurre, con il nome del campo coinvolto. */
+function dbError(e, entity) {
+  const raw = String(e?.message || e || "");
+  const m = raw.match(/UNIQUE constraint failed:\s*\w+\.(\w+)/i);
+  if (m) return { status: 409, code: "DUPLICATE", field: m[1], entity,
+                  message: `Esiste già un elemento con questo ${m[1]}` };
+
+  const nn = raw.match(/NOT NULL constraint failed:\s*\w+\.(\w+)/i);
+  if (nn) return { status: 400, code: "FIELD_REQUIRED", field: nn[1], entity,
+                   message: `Il campo ${nn[1]} è obbligatorio` };
+
+  if (/CHECK constraint failed/i.test(raw))
+    return { status: 400, code: "VALUE_NOT_ALLOWED", entity,
+             message: "Uno dei valori inseriti non è fra quelli ammessi" };
+
+  if (/FOREIGN KEY constraint failed/i.test(raw))
+    return { status: 409, code: "STILL_IN_USE", entity,
+             message: "L'elemento è collegato ad altri dati e non può essere rimosso" };
+
+  if (/no such (table|column)/i.test(raw))
+    return { status: 500, code: "DB_OUT_OF_DATE", entity,
+             message: "Il database non è aggiornato all'ultima versione" };
+
+  return { status: 500, code: "SERVER_ERROR", entity, message: "Errore del server" };
 }
 
 /* Blocca le richieste di scrittura che non arrivano dal nostro stesso sito */
@@ -347,12 +380,12 @@ export async function onRequest(context) {
   const seg = Array.isArray(params.path) ? params.path : (params.path ? [params.path] : []);
   const method = request.method.toUpperCase();
 
-  if (!env.DB) return err(500, "Binding D1 'DB' non configurato. Vedi README → Setup.");
+  if (!env.DB) return err(500, "DB_NOT_CONFIGURED", "Binding D1 'DB' non configurato. Vedi README → Setup.");
 
   if (method === "OPTIONS") return new Response(null, { status: 204 });
 
   if (method !== "GET" && method !== "HEAD" && !sameOrigin(request))
-    return err(403, "Origine non consentita");
+    return err(403, "ORIGIN_BLOCKED", "Origine non consentita");
 
   /* Il corpo si legge una volta sola: il webhook ha bisogno del testo grezzo
      per verificare la firma, quindi lo conserviamo invece di consumarlo. */
@@ -380,7 +413,7 @@ export async function onRequest(context) {
         try {
           const n = await env.DB.prepare(`SELECT COUNT(*) AS c FROM users`).first();
           out.db = "ok"; out.users = n?.c ?? 0;
-          if (out.users > 0) return err(403, "Diagnostica disponibile solo prima del setup iniziale");
+          if (out.users > 0) return err(403, "DIAG_CLOSED", "Diagnostica disponibile solo prima del setup iniziale");
         } catch (e) { out.db = "ERRORE: " + String(e?.message || e); return json(out); }
 
         try {
@@ -403,20 +436,20 @@ export async function onRequest(context) {
       // creazione del primo amministratore — possibile solo a tabella vuota
       if (seg[1] === "setup" && method === "POST") {
         const n = await env.DB.prepare(`SELECT COUNT(*) AS c FROM users`).first();
-        if ((n?.c ?? 0) > 0) return err(409, "Il setup iniziale è già stato completato");
+        if ((n?.c ?? 0) > 0) return err(409, "SETUP_DONE", "Il setup iniziale è già stato completato");
         const { email, name, password } = body;
-        if (!email || !password) return err(400, "Email e password obbligatorie");
-        if (String(password).length < 10) return err(400, "La password deve avere almeno 10 caratteri");
+        if (!email || !password) return err(400, "AUTH_FIELDS_MISSING", "Email e password obbligatorie");
+        if (String(password).length < 10) return err(400, "AUTH_PASSWORD_SHORT", "La password deve avere almeno 10 caratteri");
 
         let hash;
         try { hash = await hashPassword(String(password)); }
-        catch (e) { return err(500, "Hashing della password non riuscito", { detail: String(e?.message || e) }); }
+        catch (e) { return err(500, "PASSWORD_HASH_FAILED", "Hashing della password non riuscito", { detail: String(e?.message || e) }); }
 
         try {
           await env.DB.prepare(
             `INSERT INTO users (email, name, password_hash, role) VALUES (?1,?2,?3,'admin')`)
             .bind(String(email).toLowerCase().trim(), name || "Admin", hash).run();
-        } catch (e) { return err(500, "Creazione dell'utente non riuscita", { detail: String(e?.message || e) }); }
+        } catch (e) { return err(500, "USER_CREATE_FAILED", "Creazione dell'utente non riuscita", { detail: String(e?.message || e) }); }
 
         await audit(env, null, "setup", "users", null, email);
         return json({ ok: true });
@@ -425,7 +458,7 @@ export async function onRequest(context) {
       if (seg[1] === "login" && method === "POST") {
         const email = String(body.email || "").toLowerCase().trim();
         const password = String(body.password || "");
-        if (!email || !password) return err(400, "Email e password obbligatorie");
+        if (!email || !password) return err(400, "AUTH_FIELDS_MISSING", "Email e password obbligatorie");
 
         // freno ai tentativi ripetuti: max 8 fallimenti in 15 minuti
         const fails = await env.DB.prepare(
@@ -433,7 +466,7 @@ export async function onRequest(context) {
             WHERE action='login_failed' AND detail=?1 AND created_at > datetime('now','-15 minutes')`)
           .bind(email).first();
         if ((fails?.c ?? 0) >= 8)
-          return err(429, "Troppi tentativi falliti. Riprova tra qualche minuto.");
+          return err(429, "AUTH_TOO_MANY", "Troppi tentativi falliti. Riprova tra qualche minuto.");
 
         const u = await env.DB.prepare(
           `SELECT id, email, name, role, active, password_hash FROM users WHERE email = ?1`)
@@ -442,7 +475,7 @@ export async function onRequest(context) {
         const ok = u && u.active && await verifyPassword(password, u.password_hash);
         if (!ok) {
           await audit(env, null, "login_failed", "users", u?.id ?? null, email);
-          return err(401, "Credenziali non valide");
+          return err(401, "AUTH_BAD_CREDENTIALS", "Credenziali non valide");
         }
 
         const token = b64(crypto.getRandomValues(new Uint8Array(32)))
@@ -477,16 +510,16 @@ export async function onRequest(context) {
       if (seg[1] === "me" && method === "GET") {
         const u = await currentUser(request, env);
         return u ? json({ user: { id: u.id, email: u.email, name: u.name, role: u.role } })
-                 : err(401, "Non autenticato");
+                 : err(401, "AUTH_REQUIRED", "Non autenticato");
       }
 
       if (seg[1] === "password" && method === "POST") {
         const u = await currentUser(request, env);
-        if (!u) return err(401, "Non autenticato");
+        if (!u) return err(401, "AUTH_REQUIRED", "Non autenticato");
         const row = await env.DB.prepare(`SELECT password_hash FROM users WHERE id = ?1`).bind(u.id).first();
         if (!await verifyPassword(String(body.current || ""), row.password_hash))
-          return err(400, "Password attuale errata");
-        if (String(body.next || "").length < 10) return err(400, "La nuova password deve avere almeno 10 caratteri");
+          return err(400, "AUTH_PASSWORD_WRONG", "Password attuale errata");
+        if (String(body.next || "").length < 10) return err(400, "AUTH_PASSWORD_SHORT", "La nuova password deve avere almeno 10 caratteri");
         await env.DB.prepare(`UPDATE users SET password_hash = ?1 WHERE id = ?2`)
           .bind(await hashPassword(String(body.next)), u.id).run();
         await env.DB.prepare(`DELETE FROM sessions WHERE user_id = ?1 AND token_hash <> ?2`)
@@ -553,13 +586,13 @@ export async function onRequest(context) {
          quelli che arrivano dal browser non vengono mai usati. */
       if (seg[1] === "register" && method === "POST") {
         const open = await env.DB.prepare(`SELECT svalue FROM settings WHERE skey='registration_open'`).first();
-        if (open && open.svalue !== "1") return err(403, "Le iscrizioni sono chiuse");
+        if (open && open.svalue !== "1") return err(403, "REG_CLOSED", "Le iscrizioni sono chiuse");
 
         const req = ["first_name", "last_name", "email", "org", "tier_code"];
-        for (const f of req) if (!String(body[f] || "").trim()) return err(400, `Campo mancante: ${f}`);
+        for (const f of req) if (!String(body[f] || "").trim()) return err(400, "REG_FIELD_MISSING", `Campo mancante: ${f}`, { field: f });
         const email = String(body.email).trim();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return err(400, "Email non valida");
-        if (!body.consent_terms || !body.consent_gdpr) return err(400, "Consensi obbligatori mancanti");
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return err(400, "REG_EMAIL_INVALID", "Email non valida");
+        if (!body.consent_terms || !body.consent_gdpr) return err(400, "REG_CONSENT_MISSING", "Consensi obbligatori mancanti");
 
         /* Il menu è una scelta fra opzioni: se arriva un codice inventato si
            salva vuoto invece di accettarlo. */
@@ -576,20 +609,20 @@ export async function onRequest(context) {
            silenzio — chi le ha scritte deve sapere che non sono arrivate. */
         const allergies = String(body.allergies || "").trim().slice(0, 500);
         if (allergies && !body.allergies_consent)
-          return err(400, "Serve il consenso esplicito per comunicare allergie o intolleranze",
+          return err(400, "REG_ALLERGY_CONSENT", "Serve il consenso esplicito per comunicare allergie o intolleranze",
                      { field: "allergies_consent" });
 
         const tier = await env.DB.prepare(
           `SELECT code, early_price, late_price, capacity FROM tiers WHERE code = ?1 AND active = 1`)
           .bind(String(body.tier_code)).first();
-        if (!tier) return err(400, "Tariffa non valida");
+        if (!tier) return err(400, "REG_TIER_INVALID", "Tariffa non valida");
 
         if (tier.capacity != null) {
           const used = await env.DB.prepare(
             `SELECT COUNT(*) AS c FROM registrations
               WHERE tier_code = ?1 AND payment_status <> 'cancelled'`).bind(tier.code).first();
           if ((used?.c ?? 0) >= tier.capacity)
-            return err(409, `Posti esauriti per la tariffa "${tier.code}"`, { soldOut: tier.code });
+            return err(409, "SOLD_OUT_TIER", `Posti esauriti per la tariffa "${tier.code}"`, { soldOut: tier.code });
         }
 
         const earlyRow = await env.DB.prepare(`SELECT svalue FROM settings WHERE skey='early_until'`).first();
@@ -610,7 +643,7 @@ export async function onRequest(context) {
                   WHERE payment_status <> 'cancelled' AND addons_json LIKE ?1`)
                 .bind('%"' + a.code + '"%').first();
               if ((used?.c ?? 0) >= a.capacity)
-                return err(409, `Posti esauriti per l'opzione "${a.code}"`, { soldOut: a.code });
+                return err(409, "SOLD_OUT_ADDON", `Posti esauriti per l'opzione "${a.code}"`, { soldOut: a.code });
             }
             addonsTotal += a.price;
             chosen.push(a.code);
@@ -685,11 +718,11 @@ export async function onRequest(context) {
       if (seg[1] === "preview-pay" && method === "POST") {
         const settings = await readSettings(env);
         if (payMode(settings) !== "preview")
-          return err(403, "Il checkout simulato è disponibile solo in modalità anteprima");
+          return err(403, "PREVIEW_ONLY", "Il checkout simulato è disponibile solo in modalità anteprima");
         const ref = String(body.ref || "");
         const esito = body.esito === "ok" ? "paid" : "cancelled";
         const r = await applyPaymentOutcome(env, ref, esito, { provider: "preview" });
-        if (!r.ok) return err(404, r.reason);
+        if (!r.ok) return err(404, "REF_NOT_FOUND", r.reason);
         await audit(env, null, "preview_pay", "registrations", ref, esito);
         return json({ ok: true, ref, payment_status: esito });
       }
@@ -702,7 +735,7 @@ export async function onRequest(context) {
         const row = await env.DB.prepare(
           `SELECT ref, payment_status, payment_method, total, currency FROM registrations WHERE ref = ?1`)
           .bind(ref).first();
-        if (!row) return err(404, "Riferimento non trovato");
+        if (!row) return err(404, "REF_NOT_FOUND", "Riferimento non trovato");
         return json(row);
       }
     }
@@ -718,11 +751,11 @@ export async function onRequest(context) {
 
       if (!await stripeSignatureValid(raw, sig, secret)) {
         await audit(env, null, "webhook_rejected", "payments", null, "firma non valida");
-        return err(400, "Firma non valida");
+        return err(400, "WEBHOOK_BAD_SIGNATURE", "Firma non valida");
       }
 
       let event;
-      try { event = JSON.parse(raw); } catch { return err(400, "Corpo non leggibile"); }
+      try { event = JSON.parse(raw); } catch { return err(400, "BODY_UNREADABLE", "Corpo non leggibile"); }
 
       // I webhook vengono ritentati: lo stesso evento non va elaborato due volte.
       const seen = await env.DB.prepare(
@@ -759,10 +792,10 @@ export async function onRequest(context) {
     /* ------------------------------------------------------------- ADMIN */
     if (seg[0] === "admin") {
       const user = await currentUser(request, env);
-      if (!user) return err(401, "Non autenticato");
+      if (!user) return err(401, "AUTH_REQUIRED", "Non autenticato");
 
       const writing = method !== "GET" && method !== "HEAD";
-      if (writing && !can(user, "editor")) return err(403, "Permessi insufficienti");
+      if (writing && !can(user, "editor")) return err(403, "PERM_INSUFFICIENT", "Permessi insufficienti");
 
       /* --- riepilogo dashboard --- */
       if (seg[1] === "stats" && method === "GET") {
@@ -882,7 +915,7 @@ export async function onRequest(context) {
           const allowed = ["payment_status", "payment_method", "notes", "meal", "allergies", "org", "country", "role"];
           const cols = [], vals = [];
           for (const f of allowed) if (f in body) { cols.push(f); vals.push(body[f]); }
-          if (!cols.length) return err(400, "Nessun campo modificabile");
+          if (!cols.length) return err(400, "NOTHING_TO_SAVE", "Nessun campo modificabile");
           const set = cols.map((c, i) => `${c} = ?${i + 1}`).join(", ");
           const paid = body.payment_status === "paid" ? ", paid_at = datetime('now')" : "";
           await env.DB.prepare(
@@ -893,7 +926,7 @@ export async function onRequest(context) {
         }
 
         if (seg[2] && method === "DELETE") {
-          if (!can(user, "admin")) return err(403, "Solo un amministratore può eliminare le iscrizioni");
+          if (!can(user, "admin")) return err(403, "PERM_ADMIN_DELETE", "Solo un amministratore può eliminare le iscrizioni");
           await env.DB.prepare(`DELETE FROM registrations WHERE id = ?1`).bind(seg[2]).run();
           await audit(env, user, "delete", "registrations", seg[2], null);
           return json({ ok: true });
@@ -903,19 +936,35 @@ export async function onRequest(context) {
       /* --- contenuti (CRUD generico) --- */
       if (ENTITIES[seg[1]]) {
         const cfg = ENTITIES[seg[1]];
+        const entity = seg[1];
         if (method === "GET")    return json({ results: await entityList(env, cfg) });
         if (method === "POST") {
-          const id = await entityCreate(env, cfg, body);
-          await audit(env, user, "create", cfg.table, id, null);
-          return json({ ok: true, id }, 201);
+          try {
+            const id = await entityCreate(env, cfg, body);
+            await audit(env, user, "create", cfg.table, id, null);
+            return json({ ok: true, id }, 201);
+          } catch (e) {
+            const d = dbError(e, entity);
+            return err(d.status, d.code, d.message, { field: d.field, entity });
+          }
         }
         if (method === "PATCH" && seg[2]) {
-          await entityUpdate(env, cfg, seg[2], body);
-          await audit(env, user, "update", cfg.table, seg[2], Object.keys(body).join(","));
-          return json({ ok: true });
+          try {
+            await entityUpdate(env, cfg, seg[2], body);
+            await audit(env, user, "update", cfg.table, seg[2], Object.keys(body).join(","));
+            return json({ ok: true });
+          } catch (e) {
+            const d = dbError(e, entity);
+            return err(d.status, d.code, d.message, { field: d.field, entity });
+          }
         }
         if (method === "DELETE" && seg[2]) {
-          await env.DB.prepare(`DELETE FROM ${cfg.table} WHERE id = ?1`).bind(seg[2]).run();
+          try {
+            await env.DB.prepare(`DELETE FROM ${cfg.table} WHERE id = ?1`).bind(seg[2]).run();
+          } catch (e) {
+            const d = dbError(e, entity);
+            return err(d.status, d.code, d.message, { field: d.field, entity });
+          }
           await audit(env, user, "delete", cfg.table, seg[2], null);
           return json({ ok: true });
         }
@@ -937,8 +986,8 @@ export async function onRequest(context) {
         if (method === "PATCH") {
           const entries = Object.entries(body || {}).map(([k, v]) => [k, sanitizeSetting(k, v)]);
           const bad = entries.find(([, v]) => v instanceof Error);
-          if (bad) return err(400, `Valore non valido per "${bad[0]}": ${bad[1].message}`);
-          if (!entries.length) return err(400, "Nessuna impostazione da salvare");
+          if (bad) return err(400, "SETTING_INVALID", `Valore non valido per "${bad[0]}": ${bad[1].message}`, { field: bad[0], reason: bad[1].message });
+          if (!entries.length) return err(400, "NOTHING_TO_SAVE", "Nessuna impostazione da salvare");
           const stmt = env.DB.prepare(
             `INSERT INTO settings (skey, svalue) VALUES (?1, ?2)
              ON CONFLICT(skey) DO UPDATE SET svalue = excluded.svalue, updated_at = datetime('now')`);
@@ -950,7 +999,7 @@ export async function onRequest(context) {
 
       /* --- utenti (solo admin) --- */
       if (seg[1] === "users") {
-        if (!can(user, "admin")) return err(403, "Riservato agli amministratori");
+        if (!can(user, "admin")) return err(403, "PERM_ADMIN_ONLY", "Riservato agli amministratori");
         if (method === "GET") {
           const { results } = await env.DB.prepare(
             `SELECT id, email, name, role, active, created_at, last_login_at FROM users ORDER BY id`).all();
@@ -958,9 +1007,9 @@ export async function onRequest(context) {
         }
         if (method === "POST") {
           const { email, name, password, role } = body;
-          if (!email || !password) return err(400, "Email e password obbligatorie");
-          if (String(password).length < 10) return err(400, "La password deve avere almeno 10 caratteri");
-          if (!["admin", "editor", "viewer"].includes(role || "editor")) return err(400, "Ruolo non valido");
+          if (!email || !password) return err(400, "AUTH_FIELDS_MISSING", "Email e password obbligatorie");
+          if (String(password).length < 10) return err(400, "AUTH_PASSWORD_SHORT", "La password deve avere almeno 10 caratteri");
+          if (!["admin", "editor", "viewer"].includes(role || "editor")) return err(400, "ROLE_INVALID", "Ruolo non valido");
           const hash = await hashPassword(String(password));
           try {
             const res = await env.DB.prepare(
@@ -968,26 +1017,31 @@ export async function onRequest(context) {
               .bind(String(email).toLowerCase().trim(), name || email, hash, role || "editor").run();
             await audit(env, user, "create", "users", res.meta.last_row_id, email);
             return json({ ok: true, id: res.meta.last_row_id }, 201);
-          } catch { return err(409, "Esiste già un utente con questa email"); }
+          } catch (e) {
+            const d = dbError(e, "users");
+            return d.code === "DUPLICATE"
+              ? err(409, "USER_DUPLICATE", "Esiste già un utente con questa email", { field: "email" })
+              : err(d.status, d.code, d.message, { field: d.field, entity: "users" });
+          }
         }
         if (method === "PATCH" && seg[2]) {
           const id = Number(seg[2]);
           const cols = [], vals = [];
           if ("name" in body)   { cols.push("name");   vals.push(body.name); }
           if ("role" in body)   {
-            if (!["admin", "editor", "viewer"].includes(body.role)) return err(400, "Ruolo non valido");
-            if (id === user.id && body.role !== "admin") return err(400, "Non puoi rimuovere i tuoi stessi permessi");
+            if (!["admin", "editor", "viewer"].includes(body.role)) return err(400, "ROLE_INVALID", "Ruolo non valido");
+            if (id === user.id && body.role !== "admin") return err(400, "PERM_SELF_ROLE", "Non puoi rimuovere i tuoi stessi permessi");
             cols.push("role"); vals.push(body.role);
           }
           if ("active" in body) {
-            if (id === user.id && !body.active) return err(400, "Non puoi disattivare te stesso");
+            if (id === user.id && !body.active) return err(400, "PERM_SELF_DISABLE", "Non puoi disattivare te stesso");
             cols.push("active"); vals.push(body.active ? 1 : 0);
           }
           if (body.password) {
-            if (String(body.password).length < 10) return err(400, "La password deve avere almeno 10 caratteri");
+            if (String(body.password).length < 10) return err(400, "AUTH_PASSWORD_SHORT", "La password deve avere almeno 10 caratteri");
             cols.push("password_hash"); vals.push(await hashPassword(String(body.password)));
           }
-          if (!cols.length) return err(400, "Nessun campo da aggiornare");
+          if (!cols.length) return err(400, "NOTHING_TO_SAVE", "Nessun campo da aggiornare");
           const set = cols.map((c, i) => `${c} = ?${i + 1}`).join(", ");
           await env.DB.prepare(`UPDATE users SET ${set} WHERE id = ?${cols.length + 1}`).bind(...vals, id).run();
           if (body.password || body.active === false)
@@ -997,7 +1051,7 @@ export async function onRequest(context) {
         }
         if (method === "DELETE" && seg[2]) {
           const id = Number(seg[2]);
-          if (id === user.id) return err(400, "Non puoi eliminare te stesso");
+          if (id === user.id) return err(400, "PERM_SELF_DELETE", "Non puoi eliminare te stesso");
           await env.DB.prepare(`DELETE FROM users WHERE id = ?1`).bind(id).run();
           await audit(env, user, "delete", "users", id, null);
           return json({ ok: true });
@@ -1033,9 +1087,12 @@ export async function onRequest(context) {
       }
     }
 
-    return err(404, "Endpoint non trovato: /" + seg.join("/"));
+    return err(404, "ENDPOINT_UNKNOWN", "Endpoint non trovato: /" + seg.join("/"));
 
   } catch (e) {
-    return err(500, "Errore del server", { detail: String(e && e.message || e).slice(0, 300) });
+    /* Ultima rete: anche qui l'errore grezzo viene tradotto. Il testo tecnico
+       resta in `detail`, che il backoffice mostra solo se lo si chiede. */
+    const d = dbError(e);
+    return err(d.status, d.code, d.message, { detail: String(e && e.message || e).slice(0, 300) });
   }
 }

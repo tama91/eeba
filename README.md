@@ -18,6 +18,7 @@ public/              → sito statico, servito dal binding ASSETS
   404.html
   _headers             intestazioni di sicurezza
   admin/               backoffice (SPA)
+  admin/errors.js      testi dei messaggi di errore, uno per codice
   theme.js             palette e logo, condiviso fra sito e backoffice
   payments.js          registro dei metodi di pagamento
   pagamento.html       pagina di ritorno dal processore
@@ -31,9 +32,9 @@ schema/
   generate-seed.js     rigenera seed.sql da public/i18n.js
   migrations/          modifiche allo schema, da applicare in ordine
 tests/
-  api.test.mjs         144 test d'integrazione sull'API reale
+  api.test.mjs         185 test d'integrazione sull'API reale
   theme.test.mjs       117 controlli di contrasto sulle palette
-  frontend.test.mjs    16 controlli statici sul codice del browser
+  frontend.test.mjs    32 controlli statici, messaggi di errore inclusi
 wrangler.toml
 ```
 
@@ -139,7 +140,7 @@ l'endpoint di setup si chiude da solo.
 npm run db:schema:local
 npm run db:seed:local
 npm run dev          # → http://localhost:8787
-npm test             # 277 test, nessuna dipendenza esterna
+npm test             # 334 test, nessuna dipendenza esterna
 ```
 
 I test non toccano Cloudflare: eseguono il router vero (`src/api.js`) contro un
@@ -187,6 +188,11 @@ giornate accettano solo 1–14, i colori solo esadecimali, le lingue solo codici
 | `viewer` | solo lettura |
 | `editor` | + modificare contenuti e iscrizioni |
 | `admin` | + gestire utenti ed eliminare |
+
+**Messaggi di errore** — il server manda un codice, il backoffice lo traduce in una
+frase che dice cosa è successo e cosa fare, con i dettagli tecnici richiudibili e
+copiabili per le segnalazioni. I testi stanno in `public/admin/errors.js` e si
+riscrivono senza toccare il server; l'elenco completo è in `MESSAGGI.md`.
 
 **Registro attività** — ultime 200 operazioni con autore, azione e oggetto. Traccia anche i login falliti.
 

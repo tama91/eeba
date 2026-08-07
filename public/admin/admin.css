@@ -357,3 +357,40 @@ html[data-theme="dark"] .theme .sun{ display:none; }
 }
 
 @media (prefers-reduced-motion:reduce){ *{ transition-duration:.01ms !important; animation-duration:.01ms !important; } }
+
+/* ------------------------------------------------------- RIQUADRO ERRORE */
+/* Resta finché non lo si chiude: un errore non è una notifica che svanisce. */
+.errbox{
+  display:flex; gap:13px; align-items:flex-start;
+  background:var(--danger-soft); border:1px solid var(--border-danger, transparent);
+  border-left:3px solid var(--danger); border-radius:10px;
+  padding:15px 16px; margin-bottom:18px;
+}
+.errbox__ico{ color:var(--danger); flex:none; margin-top:1px; }
+.errbox__ico svg{ width:19px; height:19px; }
+.errbox__b{ flex:1; min-width:0; }
+.errbox__b b{ display:block; font-size:14.5px; font-weight:500; color:var(--danger); margin-bottom:4px; }
+.errbox__b p{ margin:0; font-size:13.5px; line-height:1.6; color:var(--ink-70); }
+.errbox__x{
+  background:none; border:0; cursor:pointer; color:var(--ink-45);
+  font-size:20px; line-height:1; padding:0 2px; flex:none;
+}
+.errbox__x:hover{ color:var(--ink); }
+
+.errbox__d{ margin-top:12px; }
+.errbox__d summary{
+  cursor:pointer; font-size:12.5px; color:var(--ink-45);
+  list-style:none; display:inline-flex; align-items:center; gap:6px;
+}
+.errbox__d summary::-webkit-details-marker{ display:none; }
+.errbox__d summary::before{ content:"▸"; font-size:10px; transition:transform .2s; }
+.errbox__d[open] summary::before{ transform:rotate(90deg); }
+.errbox__d summary:hover{ color:var(--ink-70); }
+.errbox__d pre{
+  margin:10px 0; padding:11px 13px; background:var(--paper); border:1px solid var(--line);
+  border-radius:7px; font-family:var(--mono); font-size:11.5px; line-height:1.6;
+  white-space:pre-wrap; word-break:break-word; color:var(--ink-70); max-height:160px; overflow:auto;
+}
+
+/* Errore mostrato nelle schermate di accesso, dove lo spazio è poco */
+.alert--err b{ font-weight:500; }

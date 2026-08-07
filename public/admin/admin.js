@@ -36,6 +36,59 @@ const dOnly = s => {
 const canWrite = () => ME && (ME.role === "admin" || ME.role === "editor");
 const isAdmin  = () => ME && ME.role === "admin";
 
+/* Un errore non è un avviso che scompare da solo: resta finché non si è
+   capito cosa fare. I toast restano per le conferme, che invece è giusto
+   svaniscano. */
+function showError(e, opts = {}) {
+  const info = e instanceof ApiError ? e
+             : { title: "Qualcosa non ha funzionato", what: String(e?.message || e),
+                 code: "SCONOSCIUTO", detail: String(e?.stack || e?.message || e), report: true };
+
+  const when = new Date().toLocaleString("it-IT");
+  const box = document.createElement("div");
+  box.className = "errbox";
+  box.innerHTML = `
+    <div class="errbox__ico">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+        <circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.3v.1"/></svg>
+    </div>
+    <div class="errbox__b">
+      <b>${esc(info.title)}</b>
+      <p>${esc(info.what)}</p>
+      ${info.detail ? `
+        <details class="errbox__d">
+          <summary>Dettagli tecnici</summary>
+          <pre id="errdet">${esc(info.code)}  ·  ${esc(when)}
+${esc(info.detail)}</pre>
+          <button class="btn btn--subtle btn--sm" data-copyerr="1">Copia per l'assistenza</button>
+        </details>` : ""}
+    </div>
+    <button class="errbox__x" aria-label="Chiudi">×</button>`;
+
+  // Sopra il modale se è aperto, altrimenti in cima alla schermata.
+  const host = $("#modal").classList.contains("is-on") ? $("#modalBody") : $("#view");
+  host.querySelectorAll(".errbox").forEach(n => n.remove());
+  host.prepend(box);
+  box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+
+  box.querySelector(".errbox__x").addEventListener("click", () => box.remove());
+  box.querySelector("[data-copyerr]")?.addEventListener("click", () => {
+    const txt = `EEBA 2027 — segnalazione\n${info.code} · ${when}\n${info.detail}\nPagina: ${location.hash || "#/dashboard"}`;
+    navigator.clipboard?.writeText(txt).then(() => toast("Copiato: incollalo nella segnalazione"), () => {});
+  });
+
+  // Se il server ha indicato un campo, lo si evidenzia invece di lasciar cercare.
+  if (info.field) {
+    const el = $(`#${info.field}`) || $(`[name="${info.field}"]`) || $(`[data-skey="${info.field}"]`);
+    if (el) {
+      el.classList.add("err");
+      el.addEventListener("input", () => el.classList.remove("err"), { once: true });
+      if (!opts.noFocus) el.focus();
+    }
+  }
+  return box;
+}
+
 let toastTimer;
 function toast(msg, isErr) {
   const t = $("#toast");
@@ -46,24 +99,42 @@ function toast(msg, isErr) {
   toastTimer = setTimeout(() => t.classList.remove("is-on"), 2600);
 }
 
+/* Un errore dell'API porta con sé il codice, il campo coinvolto e il testo
+   tecnico: chi lo mostra decide quanto farne vedere. */
+class ApiError extends Error {
+  constructor(data, status) {
+    const info = errorText(data?.code, data?.error);
+    super(info.t);
+    this.code = info.code;
+    this.title = info.t;
+    this.what = info.w;
+    this.report = !!info.report;
+    this.field = data?.field || null;
+    this.entity = data?.entity || null;
+    this.detail = data?.detail || data?.error || null;
+    this.status = status;
+  }
+}
+
 async function api(path, options = {}) {
-  const res = await fetch("/api" + path, {
-    credentials: "same-origin",
-    headers: options.body ? { "content-type": "application/json" } : {},
-    ...options
-  });
-  if (res.status === 401 && !path.startsWith("/auth")) { showGate(); throw new Error("Sessione scaduta"); }
+  let res;
+  try {
+    res = await fetch("/api" + path, {
+      credentials: "same-origin",
+      headers: options.body ? { "content-type": "application/json" } : {},
+      ...options
+    });
+  } catch {
+    throw new ApiError({ code: "NETWORK" }, 0);
+  }
+  if (res.status === 401 && !path.startsWith("/auth")) { showGate(); throw new ApiError({ code: "AUTH_REQUIRED" }, 401); }
   const ct = res.headers.get("content-type") || "";
   if (!ct.includes("application/json")) {
     if (!res.ok) throw new Error("Errore " + res.status);
     return res;
   }
   const data = await res.json();
-  if (!res.ok) {
-    // Il dettaglio tecnico serve a capire i 500 senza dover aprire i log.
-    const msg = data.error || ("Errore " + res.status);
-    throw new Error(data.detail ? `${msg} — ${data.detail}` : msg);
-  }
+  if (!res.ok) throw new ApiError(data, res.status);
   return data;
 }
 const apiJson = (path, method, body) => api(path, { method, body: JSON.stringify(body || {}) });
@@ -147,6 +218,14 @@ const mealLabel = code => {
   return (n && (n.it || n.en || Object.values(n).find(Boolean))) || code;
 };
 
+/* Nelle schermate di accesso non c'è spazio per il riquadro grande: si mostra
+   il titolo in grassetto e sotto cosa fare, che è la parte che serve. */
+function gateError(box, e) {
+  const info = e instanceof ApiError ? e : errorText(null, String(e?.message || e));
+  box.innerHTML = `<b>${esc(info.title || info.t)}</b><br>${esc(info.what || info.w)}`;
+  box.classList.remove("hidden");
+}
+
 $("#loginForm").addEventListener("submit", async e => {
   e.preventDefault();
   const box = $("#loginErr"); box.classList.add("hidden");
@@ -154,7 +233,7 @@ $("#loginForm").addEventListener("submit", async e => {
     const r = await apiJson("/auth/login", "POST", { email: $("#lEmail").value, password: $("#lPass").value });
     ME = r.user; $("#lPass").value = "";
     await showApp();
-  } catch (ex) { box.textContent = ex.message; box.classList.remove("hidden"); }
+  } catch (ex) { gateError(box, ex); }
 });
 
 $("#setupForm").addEventListener("submit", async e => {
@@ -167,7 +246,7 @@ $("#setupForm").addEventListener("submit", async e => {
     ME = r.user;
     await showApp();
     toast("Amministratore creato");
-  } catch (ex) { box.textContent = ex.message; box.classList.remove("hidden"); }
+  } catch (ex) { gateError(box, ex); }
 });
 
 $("#logoutBtn").addEventListener("click", async () => {
@@ -590,7 +669,7 @@ function openReg(r, tierName, statusLabel, reload) {
         <textarea id="mNotes" ${ro ? "disabled" : ""}>${esc(r.notes || "")}</textarea></div>`,
     actions: ro ? [{ label: "Chiudi", onClick: closeModal }] : [
       { label: "Elimina", cls: "btn--danger", onClick: () => {
-          if (!isAdmin()) return toast("Solo un amministratore può eliminare", true);
+          if (!isAdmin()) return showError(new ApiError({ code:"PERM_ADMIN_DELETE" }, 403));
           confirmDialog("Eliminare l'iscrizione?",
             `${r.ref} — ${r.first_name} ${r.last_name}. L'operazione non è reversibile.`,
             async () => {
@@ -608,7 +687,7 @@ function openReg(r, tierName, statusLabel, reload) {
               notes: $("#mNotes").value
             });
             closeModal(); toast("Iscrizione aggiornata"); reload();
-          } catch (e) { toast(e.message, true); }
+          } catch (e) { showError(e); }
         } }
     ]
   });
@@ -694,7 +773,7 @@ VIEWS.programme = async function () {
               if (isNew) await apiJson("/admin/programme", "POST", payload);
               else await apiJson(`/admin/programme/${s.id}`, "PATCH", payload);
               closeModal(); toast("Programma aggiornato"); route();
-            } catch (e) { toast(e.message, true); }
+            } catch (e) { showError(e); }
           } }
       ]
     });
@@ -761,7 +840,7 @@ VIEWS.speakers = async function () {
               if (isNew) await apiJson("/admin/speakers", "POST", payload);
               else await apiJson(`/admin/speakers/${s.id}`, "PATCH", payload);
               closeModal(); toast("Relatore salvato"); route();
-            } catch (e) { toast(e.message, true); }
+            } catch (e) { showError(e); }
           } }
       ]
     });
@@ -821,12 +900,12 @@ VIEWS.sponsors = async function () {
               logo_url: $("#zLogo").value.trim() || null, url: $("#zUrl").value.trim() || null,
               sort: Number($("#zSort").value) || 0, published: $("#zPub").checked ? 1 : 0
             };
-            if (!payload.name) return toast("Il nome è obbligatorio", true);
+            if (!payload.name) return showError(new ApiError({ code:"FIELD_REQUIRED", field:"zName", error:"nome mancante" }, 400));
             try {
               if (isNew) await apiJson("/admin/sponsors", "POST", payload);
               else await apiJson(`/admin/sponsors/${s.id}`, "PATCH", payload);
               closeModal(); toast("Sponsor salvato"); route();
-            } catch (e) { toast(e.message, true); }
+            } catch (e) { showError(e); }
           } }
       ]
     });
@@ -896,7 +975,7 @@ VIEWS.translations = async function () {
               await apiJson(`/admin/translations/${r.id}`, "PATCH", { value_json });
               r.value_json = value_json;
               closeModal(); toast("Traduzione salvata"); render();
-            } catch (e) { toast(e.message, true); }
+            } catch (e) { showError(e); }
           } }
       ]
     });
@@ -1017,12 +1096,12 @@ VIEWS.pricing = async function () {
       } else {
         payload.price = Math.round(Number($("#cPrice").value) * 100) || 0;
       }
-      if (!payload.code) return toast("Il codice è obbligatorio", true);
+      if (!payload.code) return showError(new ApiError({ code:"FIELD_REQUIRED", field:"cCode", error:"codice mancante" }, 400));
       try {
         if (isNew) await apiJson(`/admin/${kind}`, "POST", payload);
         else await apiJson(`/admin/${kind}/${o.id}`, "PATCH", payload);
         closeModal(); toast("Listino aggiornato"); route();
-      } catch (e) { toast(e.message, true); }
+      } catch (e) { showError(e); }
     };
   }
 
@@ -1059,12 +1138,12 @@ VIEWS.pricing = async function () {
         { label: "Salva", cls: "btn--primary", onClick: async () => {
             const payload = { code: $("#kCode").value.trim(), sort: Number($("#kSort").value) || 0,
                               name_json: readLangField("mn"), active: $("#kAct").checked ? 1 : 0 };
-            if (!payload.code) return toast("Il codice è obbligatorio", true);
+            if (!payload.code) return showError(new ApiError({ code:"FIELD_REQUIRED", field:"cCode", error:"codice mancante" }, 400));
             try {
               if (isNew) await apiJson("/admin/meals", "POST", payload);
               else await apiJson(`/admin/meals/${m.id}`, "PATCH", payload);
               closeModal(); toast("Menu salvato"); await refreshConfig(); route();
-            } catch (e) { toast(e.message, true); }
+            } catch (e) { showError(e); }
           } }
       ]
     });
@@ -1229,7 +1308,7 @@ npx wrangler secret put STRIPE_WEBHOOK_SECRET</code></pre>
 
   $("#savePayments")?.addEventListener("click", async () => {
     const methods = $$("[data-m]").filter(i => i.checked).map(i => i.dataset.m);
-    if (!methods.length) return toast("Almeno un metodo deve restare attivo", true);
+    if (!methods.length) return showError(new ApiError({ code:"PAY_NO_METHOD" }, 400));
     if (selMode !== "preview" && !methods.some(m => PAYMENT_BY_CODE[m]?.kind === "offline"))
       toast("Nessun metodo differito attivo: chi paga per fattura non potrà iscriversi");
     try {
@@ -1240,7 +1319,7 @@ npx wrangler secret put STRIPE_WEBHOOK_SECRET</code></pre>
       await refreshConfig();
       toast("Pagamenti aggiornati");
       route();
-    } catch (e) { toast(e.message, true); }
+    } catch (e) { showError(e); }
   });
 };
 
@@ -1400,7 +1479,7 @@ VIEWS.appearance = async function () {
 
   $("#saveAppearance")?.addEventListener("click", async () => {
     const svg = $("#logoSvg").value.trim();
-    if (svg && !svg.startsWith("<svg")) return toast("Il codice SVG deve iniziare con <svg", true);
+    if (svg && !svg.startsWith("<svg")) return showError(new ApiError({ code:"SVG_INVALID", field:"logoSvg" }, 400));
     try {
       await apiJson("/admin/settings", "PATCH", {
         theme_preset: state.preset,
@@ -1410,7 +1489,7 @@ VIEWS.appearance = async function () {
       });
       await refreshConfig();
       toast("Aspetto salvato — online al prossimo caricamento del sito");
-    } catch (e) { toast(e.message, true); }
+    } catch (e) { showError(e); }
   });
 
   drawPreview();
@@ -1459,7 +1538,7 @@ VIEWS.settings = async function () {
   $("#saveSettings")?.addEventListener("click", async () => {
     const payload = Object.fromEntries($$("[data-skey]").map(i => [i.dataset.skey, i.value]));
     try { await apiJson("/admin/settings", "PATCH", payload); toast("Impostazioni salvate"); }
-    catch (e) { toast(e.message, true); }
+    catch (e) { showError(e); }
   });
 
   $("#savePw").addEventListener("click", async () => {
@@ -1468,7 +1547,7 @@ VIEWS.settings = async function () {
       await apiJson("/auth/password", "POST", { current: $("#pwCur").value, next: $("#pwNew").value });
       $("#pwCur").value = $("#pwNew").value = "";
       toast("Password aggiornata");
-    } catch (e) { box.textContent = e.message; box.classList.remove("hidden"); }
+    } catch (e) { gateError(box, e); }
   });
 };
 
@@ -1538,7 +1617,7 @@ VIEWS.users = async function () {
                 await apiJson(`/admin/users/${u.id}`, "PATCH", payload);
               }
               closeModal(); toast("Utente salvato"); route();
-            } catch (e) { toast(e.message, true); }
+            } catch (e) { showError(e); }
           } }
       ]
     });

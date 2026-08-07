@@ -32,6 +32,7 @@ const group = t => out.push(`\n${t}`);
 /* Globali del browser e del progetto che i file possono usare liberamente. */
 const BROWSER = new Set(["if","for","while","switch","catch","return","typeof","function","await","new",
   "async","var","let","const","else","do","try","in","of","delete","void","yield","this","super","case",
+  "constructor","class","extends","static","get","set","instanceof",
   "Number","String","Boolean","Object","Array","Math","Date","JSON","Intl","parseInt","parseFloat","isNaN",
   "setTimeout","setInterval","clearTimeout","clearInterval","fetch","matchMedia","atob","btoa","alert","confirm",
   "encodeURIComponent","decodeURIComponent","URLSearchParams","URL","Blob","Promise","Set","Map","WeakMap",
@@ -42,7 +43,8 @@ const BROWSER = new Set(["if","for","while","switch","catch","return","typeof","
 const SHARED = {
   "public/theme.js":    ["THEMES","DEFAULT_THEME","resolveTheme","applyTheme","logoHtml","deriveAccent","contrast","isHex","norm","mix","hexToRgb","relLum"],
   "public/payments.js": ["PAYMENT_METHODS","PAYMENT_BY_CODE","PAYMENT_ICONS","enabledPaymentMethods","paymentsMode","isOnlineMethod"],
-  "public/i18n.js":     ["LANGS","I18N","PRICING","COUNTRIES"]
+  "public/i18n.js":     ["LANGS","I18N","PRICING","COUNTRIES"],
+  "public/admin/errors.js": ["ERRORS","errorText"]
 };
 
 /* Toglie commenti e testo delle stringhe, così "Nome (opzionale)" dentro un
@@ -116,7 +118,7 @@ function stripLiterals(src) {
 group("Funzioni chiamate ma mai definite");
 for (const [file, shared] of [
   ["public/app.js", ["public/theme.js", "public/payments.js", "public/i18n.js"]],
-  ["public/admin/admin.js", ["public/theme.js", "public/payments.js"]]
+  ["public/admin/admin.js", ["public/theme.js", "public/payments.js", "public/admin/errors.js"]]
 ]) {
   const src = stripLiterals(read(file));
   const defined = new Set([
@@ -257,6 +259,51 @@ group("Pagine legali");
   // l'indirizzo del titolare è un segnaposto finché non viene compilato
   check("⚠ email del titolare ancora da compilare — non blocca i test",
         true, LEGAL_ORG.email);
+}
+
+/* --------------------------------------------------- messaggi di errore */
+group("Messaggi di errore");
+{
+  const { ERRORS } = new Function(read("public/admin/errors.js") + ";return {ERRORS};")();
+  const api = read("src/api.js");
+  const admin = read("public/admin/admin.js");
+
+  // ogni codice emesso dal server o dal backoffice ha un testo
+  const emitted = new Set([
+    ...[...api.matchAll(/err\([0-9]+, "([A-Z_]+)"/g)].map(m => m[1]),
+    ...[...api.matchAll(/code: "([A-Z_]+)"/g)].map(m => m[1]),
+    ...[...admin.matchAll(/code:\s*"([A-Z_]+)"/g)].map(m => m[1])
+  ]);
+  emitted.delete("SCONOSCIUTO");   // segnaposto di errorText, non un codice vero
+  const noText = [...emitted].filter(c => !ERRORS[c]);
+  check(`${emitted.size} codici, tutti con un testo`, noText.length === 0, noText.join(", "));
+
+  // ogni voce dice cosa fare, non solo cosa è successo
+  const noAction = Object.entries(ERRORS).filter(([, v]) => !v.w || v.w.length < 25).map(([k]) => k);
+  check("ogni messaggio spiega cosa fare", noAction.length === 0, noAction.join(", "));
+
+  /* Niente gergo: sono i termini che una segreteria non ha motivo di conoscere.
+     "database" resta ammesso solo dove il problema è davvero quello e va
+     segnalato a chi cura il sito. */
+  const jargon = /\b(constraint|SQLITE|D1_ERROR|null|undefined|endpoint|payload|token|hash|binding|JSON|API|HTTP|4[0-9]{2}|5[0-9]{2})\b/i;
+  const jargonHits = Object.entries(ERRORS)
+    .filter(([, v]) => jargon.test(v.t) || jargon.test(v.w))
+    .map(([k]) => k);
+  check("nessun termine tecnico nei testi", jargonHits.length === 0, jargonHits.join(", "));
+
+  // il titolo è una frase breve, non un paragrafo
+  const longTitles = Object.entries(ERRORS).filter(([, v]) => v.t.length > 60).map(([k]) => k);
+  check("titoli brevi", longTitles.length === 0, longTitles.join(", "));
+
+  // nessun messaggio comincia dando la colpa a chi legge
+  const blaming = Object.entries(ERRORS)
+    .filter(([, v]) => /^(hai sbagliato|errore|non valido|invalido|fallit)/i.test(v.t))
+    .map(([k]) => k);
+  check("nessun messaggio colpevolizza", blaming.length === 0, blaming.join(", "));
+
+  // il backoffice mostra gli errori nel riquadro, non nei toast che svaniscono
+  const toastErrors = [...admin.matchAll(/toast\([^)]*,\s*true\s*\)/g)].length;
+  check("gli errori non usano più i toast effimeri", toastErrors === 0, toastErrors + " rimasti");
 }
 
 /* ------------------------------------------------------------- sicurezza */

@@ -643,6 +643,49 @@ group("Menu e allergie");
   await call("/admin/settings", { method:"PATCH", body:{ meals_enabled:"1" } });
 }
 
+group("Messaggi di errore comprensibili");
+{
+  /* Il caso che ha fatto nascere questo gruppo: creando due volte la stessa
+     opzione di menu, a schermo arrivava
+     "D1_ERROR: UNIQUE constraint failed: meals.code: SQLITE_CONSTRAINT".
+     Corretto per chi ha scritto il codice, inservibile per una segreteria. */
+  let r = await call("/admin/meals", { method: "POST", body: {
+    code: "test_doppione", name_json: { it: "Prova" }, sort: 50, active: 1 } });
+  check("prima creazione riuscita", r.status === 201, r.status);
+
+  r = await call("/admin/meals", { method: "POST", body: {
+    code: "test_doppione", name_json: { it: "Prova" }, sort: 51, active: 1 } });
+  check("il doppione viene rifiutato", r.status === 409, r.status);
+  check("con un codice riconoscibile", r.data.code === "DUPLICATE", JSON.stringify(r.data));
+  check("e indica quale campo", r.data.field === "code", r.data.field);
+  const raw = JSON.stringify(r.data);
+  check("nessun gergo del database nella risposta",
+    !/constraint|SQLITE|D1_ERROR|sqlite/i.test(raw), raw);
+
+  /* Un valore non ammesso da un vincolo CHECK */
+  r = await call("/admin/sponsors", { method: "POST", body: {
+    name: "Prova", tier: "diamante" } });
+  check("livello sponsor inesistente rifiutato", r.status === 400, r.status);
+  check("tradotto in VALUE_NOT_ALLOWED", r.data.code === "VALUE_NOT_ALLOWED", JSON.stringify(r.data));
+  check("senza gergo", !/constraint|SQLITE/i.test(JSON.stringify(r.data)), JSON.stringify(r.data));
+
+  /* Ogni errore porta un codice: è ciò che permette di riscrivere i testi
+     senza toccare il server. */
+  const samples = [
+    ["/admin/users", "POST", { email: "gary@eeba.eu", name: "X", password: "passwordLunga12" }, "USER_DUPLICATE"],
+    ["/admin/settings", "PATCH", { event_days: "99" }, "SETTING_INVALID"],
+    ["/public/register", "POST", { first_name: "" }, "REG_FIELD_MISSING"]
+  ];
+  for (const [path, method, body, expected] of samples) {
+    const res = await call(path, { method, body, useCookie: !path.startsWith("/public") });
+    check(`${path} risponde con ${expected}`, res.data.code === expected,
+          `${res.status} ${JSON.stringify(res.data).slice(0, 90)}`);
+  }
+
+  await call("/admin/meals/" + (await call("/admin/meals")).data.results
+    .find(m => m.code === "test_doppione").id, { method: "DELETE" });
+}
+
 group("Cambio password e chiusura sessione");
 {
   let r = await call("/auth/password", { method: "POST", body: { current: "sbagliata", next: "nuovaPasswordOk1" } });
