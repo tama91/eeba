@@ -20,6 +20,11 @@ INSERT INTO settings (skey, svalue) VALUES ('theme_preset', 'clinical-blue');
 INSERT INTO settings (skey, svalue) VALUES ('theme_accent', '');
 INSERT INTO settings (skey, svalue) VALUES ('logo_url', '');
 INSERT INTO settings (skey, svalue) VALUES ('logo_svg', '');
+INSERT INTO settings (skey, svalue) VALUES ('payments_provider', 'stripe');
+INSERT INTO settings (skey, svalue) VALUES ('payments_mode', 'preview');
+INSERT INTO settings (skey, svalue) VALUES ('payments_methods', 'card,bancontact,ideal,paypal,revolut_pay,sepa,inv');
+INSERT INTO settings (skey, svalue) VALUES ('payments_currency', 'EUR');
+INSERT INTO settings (skey, svalue) VALUES ('invoice_note', '');
 
 DELETE FROM tiers;
 INSERT INTO tiers (code, early_price, late_price, name_json, desc_json, sort, active) VALUES ('mem', 52000, 62000, '{"en":"EEBA Member","it":"Socio EEBA","nl":"EEBA-lid","fr":"Membre EEBA"}', '{"en":"Individual or institutional member in good standing","it":"Socio individuale o istituzionale in regola","nl":"Individueel of institutioneel lid in goede standing","fr":"Membre individuel ou institutionnel à jour de cotisation"}', 0, 1);
@@ -228,9 +233,23 @@ INSERT INTO translations (tkey, value_json) VALUES ('reg.consent2', '{"en":"I ag
 INSERT INTO translations (tkey, value_json) VALUES ('reg.consent3', '{"en":"I would like to receive news about EEBA meetings and webinars.","it":"Desidero ricevere notizie sui congressi e i webinar EEBA.","nl":"Ik ontvang graag nieuws over EEBA-vergaderingen en webinars.","fr":"Je souhaite recevoir des nouvelles des congrès et webinaires EEBA."}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.payTitle', '{"en":"Payment","it":"Pagamento","nl":"Betaling","fr":"Paiement"}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.payLead', '{"en":"This prototype does not process real payments. In production this step connects to the payment provider (card, SEPA transfer or institutional invoice).","it":"Questo prototipo non elabora pagamenti reali. In produzione questo passaggio si collega al provider di pagamento (carta, bonifico SEPA o fattura istituzionale).","nl":"Dit prototype verwerkt geen echte betalingen. In productie maakt deze stap verbinding met de betaalprovider (kaart, SEPA-overschrijving of institutionele factuur).","fr":"Ce prototype ne traite aucun paiement réel. En production, cette étape se connecte au prestataire de paiement (carte, virement SEPA ou facture institutionnelle)."}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.pay.redirect', '{"en":"You''ll be taken to a secure payment page.","it":"Verrai portato su una pagina di pagamento sicura.","nl":"U wordt naar een beveiligde betaalpagina gebracht.","fr":"Vous serez dirigé vers une page de paiement sécurisée."}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.pay.offlineNote', '{"en":"Your registration is recorded straight away and confirmed once payment arrives.","it":"L''iscrizione viene registrata subito e confermata quando il pagamento arriva.","nl":"Uw inschrijving wordt meteen vastgelegd en bevestigd zodra de betaling binnen is.","fr":"L''inscription est enregistrée immédiatement et confirmée dès réception du paiement."}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.pay.preview', '{"en":"Preview mode — no real payment is taken.","it":"Modalità anteprima — nessun pagamento reale viene addebitato.","nl":"Voorbeeldmodus — er wordt niets echt afgeschreven.","fr":"Mode aperçu — aucun paiement réel n''est prélevé."}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.pay.processing', '{"en":"Completing your payment…","it":"Sto completando il pagamento…","nl":"Bezig met afronden van de betaling…","fr":"Finalisation du paiement…"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.pay.okT', '{"en":"Payment received.","it":"Pagamento ricevuto.","nl":"Betaling ontvangen.","fr":"Paiement reçu."}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.pay.okP', '{"en":"Your place is confirmed. The confirmation and invoice are on their way to your inbox.","it":"Il tuo posto è confermato. Conferma e fattura stanno arrivando nella tua casella.","nl":"Uw plaats is bevestigd. Bevestiging en factuur zijn onderweg naar uw mailbox.","fr":"Votre place est confirmée. La confirmation et la facture arrivent dans votre boîte mail."}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.pay.failT', '{"en":"Payment not completed.","it":"Pagamento non completato.","nl":"Betaling niet afgerond.","fr":"Paiement non abouti."}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.pay.failP', '{"en":"Nothing has been charged. Your registration is saved — you can try again or choose another method.","it":"Non è stato addebitato nulla. L''iscrizione è salvata: puoi riprovare o scegliere un altro metodo.","nl":"Er is niets afgeschreven. Uw inschrijving is bewaard: probeer opnieuw of kies een andere methode.","fr":"Rien n''a été prélevé. Votre inscription est enregistrée : réessayez ou choisissez un autre moyen."}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.pay.retry', '{"en":"Try again","it":"Riprova","nl":"Opnieuw proberen","fr":"Réessayer"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.pay.pending', '{"en":"Awaiting payment","it":"In attesa di pagamento","nl":"Wacht op betaling","fr":"En attente de paiement"}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.pm.card', '{"en":"Credit / debit card","it":"Carta di credito / debito","nl":"Krediet- / debetkaart","fr":"Carte bancaire"}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.pm.sepa', '{"en":"SEPA bank transfer","it":"Bonifico SEPA","nl":"SEPA-overschrijving","fr":"Virement SEPA"}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.pm.inv', '{"en":"Institutional invoice","it":"Fattura istituzionale","nl":"Institutionele factuur","fr":"Facture institutionnelle"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.pm.bancontact', '{"en":"Bancontact","it":"Bancontact","nl":"Bancontact","fr":"Bancontact"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.pm.ideal', '{"en":"iDEAL","it":"iDEAL","nl":"iDEAL","fr":"iDEAL"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.pm.paypal', '{"en":"PayPal","it":"PayPal","nl":"PayPal","fr":"PayPal"}');
+INSERT INTO translations (tkey, value_json) VALUES ('reg.pm.revolut_pay', '{"en":"Revolut Pay","it":"Revolut Pay","nl":"Revolut Pay","fr":"Revolut Pay"}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.sumTitle', '{"en":"Your registration","it":"La tua iscrizione","nl":"Uw inschrijving","fr":"Votre inscription"}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.sumSub', '{"en":"Prices in EUR, VAT included","it":"Prezzi in EUR, IVA inclusa","nl":"Prijzen in EUR, incl. btw","fr":"Prix en EUR, TVA comprise"}');
 INSERT INTO translations (tkey, value_json) VALUES ('reg.sumEmpty', '{"en":"Select a category to see the total","it":"Seleziona una categoria per vedere il totale","nl":"Kies een categorie om het totaal te zien","fr":"Choisissez une catégorie pour voir le total"}');
@@ -312,5 +331,5 @@ INSERT INTO translations (tkey, value_json) VALUES ('foot.terms', '{"en":"Terms"
 INSERT INTO translations (tkey, value_json) VALUES ('foot.cook', '{"en":"Cookies","it":"Cookie","nl":"Cookies","fr":"Cookies"}');
 INSERT INTO translations (tkey, value_json) VALUES ('foot.disc', '{"en":"Demo prototype. Programme, fees and deadlines are indicative and not an official EEBA publication.","it":"Prototipo dimostrativo. Programma, quote e scadenze sono indicativi e non costituiscono una pubblicazione ufficiale EEBA.","nl":"Demonstratieprototype. Programma, tarieven en deadlines zijn indicatief en vormen geen officiële EEBA-publicatie.","fr":"Prototype de démonstration. Programme, tarifs et échéances sont indicatifs et ne constituent pas une publication officielle de l''EEBA."}');
 
--- 236 chiavi di traduzione, 5 tariffe, 4 extra, 20 slot di programma.
+-- 250 chiavi di traduzione, 5 tariffe, 4 extra, 20 slot di programma.
 -- Nessun utente creato: il primo admin si registra da /admin (setup iniziale).

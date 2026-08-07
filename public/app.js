@@ -383,17 +383,39 @@ function renderAddons() {
   }));
 }
 
+function payMethodList() {
+  // Dal database se disponibile, altrimenti i tre metodi di base.
+  const codes = DATA.payments?.methods?.length ? DATA.payments.methods : ["card", "sepa", "inv"];
+  return codes.filter(c => PAYMENT_BY_CODE[c]).map(c => PAYMENT_BY_CODE[c]);
+}
+
 function renderPayMethods() {
   const check = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m4 12.5 5.2 5.2L20 7"/></svg>`;
-  $("#payList").innerHTML = ["card", "sepa", "inv"].map(id => `
-    <label class="addon ${state.pay === id ? "is-sel" : ""}" data-pay="${id}">
+  const list = payMethodList();
+
+  if (!list.some(m => m.code === state.pay)) state.pay = list[0]?.code || "card";
+
+  $("#payList").innerHTML = list.map(m => `
+    <label class="addon ${state.pay === m.code ? "is-sel" : ""}" data-pay="${m.code}">
       <span class="addon__box" style="border-radius:50%">${check}</span>
-      <span class="addon__t"><b>${T.reg.pm[id]}</b></span>
+      <span class="pay__ico">${PAYMENT_ICONS[m.icon] || ""}</span>
+      <span class="addon__t">
+        <b>${T.reg.pm[m.code] || m.code}</b>
+        <span>${pick(m.note)}</span>
+      </span>
     </label>`).join("");
 
   $$("#payList .addon").forEach(el => el.addEventListener("click", e => {
     e.preventDefault(); state.pay = el.dataset.pay; renderPayMethods();
   }));
+
+  // Nota sotto l'elenco: cosa succede dopo aver premuto il pulsante.
+  const sel = PAYMENT_BY_CODE[state.pay];
+  const notes = [];
+  if (DATA.payments?.mode === "preview") notes.push(`<span class="chip chip--accent" style="margin-bottom:8px"><i class="dot"></i>${T.reg.pay.preview}</span>`);
+  notes.push(`<p class="small" style="margin:10px 0 0">${
+    sel?.kind === "offline" ? T.reg.pay.offlineNote : T.reg.pay.redirect}</p>`);
+  $("#payNote").innerHTML = notes.join("");
 }
 
 function renderFormOptions() {
@@ -511,9 +533,17 @@ async function completeBooking() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Registration failed");
+
+    // Metodo online: si va alla pagina di pagamento. Il ritorno passa da /pagamento.
+    if (data.checkout_url) {
+      try { sessionStorage.setItem("eeba27.ref", data.ref); } catch (e) {}
+      location.href = data.checkout_url;
+      return;
+    }
+
     $("#bookRef").textContent = data.ref;
+    if (data.payment_error) toast(data.payment_error);
     goStep(4);
-    // In produzione: se il server restituisce un checkout_url, qui si reindirizza.
   } catch (e) {
     // L'API non è disponibile (es. sito aperto in locale): si mostra comunque
     // la conferma con un riferimento provvisorio, senza far perdere i dati.

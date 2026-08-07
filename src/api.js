@@ -99,6 +99,109 @@ function sameOrigin(request) {
   try { return new URL(origin).host === new URL(request.url).host; } catch { return false; }
 }
 
+/* ================================================================ PAGAMENTI */
+/* Il registro dei metodi è duplicato qui di proposito: il server non deve
+   fidarsi di quello che arriva dal browser, nemmeno dell'elenco dei metodi.
+   Va tenuto allineato a public/payments.js — lo verifica il test. */
+const METHODS = {
+  card:        { kind: "online",  stripe: "card" },
+  bancontact:  { kind: "online",  stripe: "bancontact" },
+  ideal:       { kind: "online",  stripe: "ideal" },
+  paypal:      { kind: "online",  stripe: "paypal" },
+  revolut_pay: { kind: "online",  stripe: "revolut_pay" },
+  sepa:        { kind: "offline", stripe: null },
+  inv:         { kind: "offline", stripe: null }
+};
+
+const readSettings = async env => {
+  const { results } = await env.DB.prepare(`SELECT skey, svalue FROM settings`).all();
+  return Object.fromEntries(results.map(r => [r.skey, r.svalue]));
+};
+
+const payMode = s => ["preview", "test", "live"].includes(s.payments_mode) ? s.payments_mode : "preview";
+
+const enabledMethods = s => String(s.payments_methods || "card,sepa,inv")
+  .split(",").map(x => x.trim()).filter(c => METHODS[c]);
+
+/* Crea la sessione di pagamento presso Stripe.
+
+   Due cose non negoziabili:
+   - l'importo è quello già calcolato dal server e salvato sull'iscrizione,
+     mai uno che arrivi dal browser;
+   - il riferimento dell'iscrizione viaggia in client_reference_id, così il
+     webhook sa a quale riga applicare l'esito. */
+async function stripeCheckout(env, settings, reg, method, origin) {
+  const key = env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error("STRIPE_SECRET_KEY non configurata: vedi PAGAMENTI.md");
+
+  const form = new URLSearchParams();
+  form.set("mode", "payment");
+  form.set("client_reference_id", reg.ref);
+  form.set("customer_email", reg.email);
+  form.set("success_url", `${origin}/pagamento.html?ref=${reg.ref}&esito=ok`);
+  form.set("cancel_url",  `${origin}/pagamento.html?ref=${reg.ref}&esito=annullato`);
+  form.set("payment_method_types[0]", METHODS[method].stripe);
+  form.set("line_items[0][quantity]", "1");
+  form.set("line_items[0][price_data][currency]", (settings.payments_currency || "EUR").toLowerCase());
+  form.set("line_items[0][price_data][unit_amount]", String(reg.total));
+  form.set("line_items[0][price_data][product_data][name]", `EEBA 2027 — ${reg.ref}`);
+  form.set("metadata[ref]", reg.ref);
+
+  const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+    method: "POST",
+    headers: {
+      authorization: "Bearer " + key,
+      "content-type": "application/x-www-form-urlencoded",
+      "idempotency-key": "eeba-" + reg.ref          // niente doppie sessioni sullo stesso riferimento
+    },
+    body: form
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error?.message || "Stripe ha rifiutato la richiesta");
+  return { url: data.url, sessionId: data.id };
+}
+
+/* Verifica la firma del webhook Stripe (schema t=…,v1=… con HMAC-SHA256).
+   Senza questa verifica chiunque potrebbe dichiarare pagata un'iscrizione. */
+async function stripeSignatureValid(rawBody, header, secret, toleranceSec = 300) {
+  if (!header || !secret) return false;
+  const parts = Object.fromEntries(header.split(",").map(p => p.split("=").map(x => x.trim())));
+  const t = Number(parts.t);
+  if (!t || Math.abs(Date.now() / 1000 - t) > toleranceSec) return false;
+
+  const key = await crypto.subtle.importKey("raw", enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`${t}.${rawBody}`));
+  const expected = [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, "0")).join("");
+
+  const given = String(parts.v1 || "");
+  if (given.length !== expected.length) return false;
+  let diff = 0;                                       // confronto a tempo costante
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ given.charCodeAt(i);
+  return diff === 0;
+}
+
+/* Applica l'esito a un'iscrizione. Idempotente: un webhook ritentato non
+   cambia niente, e un'iscrizione già pagata non torna indietro. */
+async function applyPaymentOutcome(env, ref, status, { provider, intentId, sessionId } = {}) {
+  const reg = await env.DB.prepare(
+    `SELECT id, payment_status FROM registrations WHERE ref = ?1`).bind(ref).first();
+  if (!reg) return { ok: false, reason: "iscrizione inesistente" };
+  if (reg.payment_status === "paid" && status !== "refunded")
+    return { ok: true, reason: "già pagata, nessuna modifica" };
+
+  const paidAt = status === "paid" ? ", paid_at = datetime('now')" : "";
+  const refAt  = status === "refunded" ? ", refunded_at = datetime('now')" : "";
+  await env.DB.prepare(
+    `UPDATE registrations
+        SET payment_status = ?1, provider = COALESCE(?2, provider),
+            intent_id = COALESCE(?3, intent_id), session_id = COALESCE(?4, session_id),
+            updated_at = datetime('now')${paidAt}${refAt}
+      WHERE id = ?5`)
+    .bind(status, provider ?? null, intentId ?? null, sessionId ?? null, reg.id).run();
+  return { ok: true };
+}
+
 /* ------------------------------------------------- validazione impostazioni */
 /* L'SVG del logo viene poi inserito nella pagina come markup: qui si toglie
    tutto ciò che potrebbe eseguire codice. Chi ha accesso al backoffice è una
@@ -143,6 +246,19 @@ function sanitizeSetting(key, value) {
       return v;
     case "registration_open":
       return v === "1" || v === "0" ? v : new Error("solo 0 o 1");
+    case "payments_mode":
+      return ["preview", "test", "live"].includes(v) ? v : new Error("solo preview, test o live");
+    case "payments_provider":
+      return ["stripe"].includes(v) ? v : new Error("processore non supportato");
+    case "payments_methods": {
+      const list = v.split(",").map(x => x.trim()).filter(Boolean);
+      const unknown = list.filter(c => !METHODS[c]);
+      if (unknown.length) return new Error("metodi sconosciuti: " + unknown.join(", "));
+      if (!list.length) return new Error("almeno un metodo deve restare attivo");
+      return list.join(",");
+    }
+    case "payments_currency":
+      return /^[A-Z]{3}$/.test(v) ? v : new Error("codice valuta di tre lettere maiuscole");
     default:
       return v.slice(0, 4000);
   }
@@ -233,9 +349,13 @@ export async function onRequest(context) {
   if (method !== "GET" && method !== "HEAD" && !sameOrigin(request))
     return err(403, "Origine non consentita");
 
+  /* Il corpo si legge una volta sola: il webhook ha bisogno del testo grezzo
+     per verificare la firma, quindi lo conserviamo invece di consumarlo. */
+  let rawBody = "";
   let body = {};
   if (method === "POST" || method === "PATCH" || method === "PUT") {
-    try { body = await request.json(); } catch { body = {}; }
+    try { rawBody = await request.text(); } catch { rawBody = ""; }
+    try { body = rawBody ? JSON.parse(rawBody) : {}; } catch { body = {}; }
   }
 
   try {
@@ -407,6 +527,11 @@ export async function onRequest(context) {
 
         return json({
           settings: settingsMap,
+          payments: {
+            mode: payMode(settingsMap),
+            provider: settingsMap.payments_provider || "stripe",
+            methods: enabledMethods(settingsMap)
+          },
           translations: Object.fromEntries(translations.results.map(r => [r.tkey, parseJson(r.value_json, {})])),
           programme,
           speakers: speakers.results.map(hydrateJson),
@@ -470,6 +595,11 @@ export async function onRequest(context) {
         const ref = "EEBA27-" + b64(crypto.getRandomValues(new Uint8Array(6)))
           .replace(/[^A-Za-z0-9]/g, "").slice(0, 6).toUpperCase();
 
+        // Il metodo deve essere fra quelli attivi: non basta che esista.
+        const settingsForMethod = await readSettings(env);
+        const allowed = enabledMethods(settingsForMethod);
+        const method = allowed.includes(body.payment_method) ? body.payment_method : allowed[0];
+
         await env.DB.prepare(
           `INSERT INTO registrations
              (ref, first_name, last_name, email, org, role, country, vat, diet, lang,
@@ -481,13 +611,122 @@ export async function onRequest(context) {
             String(body.org || "").trim(), body.role || null, body.country || null,
             body.vat || null, body.diet || null, body.lang || "en",
             tier.code, tierPrice, JSON.stringify(chosen), addonsTotal, total,
-            ["card", "sepa", "inv"].includes(body.payment_method) ? body.payment_method : "card",
-            body.newsletter ? 1 : 0).run();
+            method, body.newsletter ? 1 : 0).run();
 
         await audit(env, null, "create", "registrations", ref, email);
-        // Qui, in produzione, si crea la sessione di pagamento e si restituisce l'URL.
-        return json({ ref, total, currency: "EUR", payment_status: "pending" }, 201);
+
+        /* Dal metodo scelto dipende cosa succede adesso.
+           Offline: l'iscrizione resta in attesa, la segreteria la segnerà pagata.
+           Online: si apre una sessione presso il processore, salvo in modalità
+           anteprima, dove il checkout è simulato dal sito stesso. */
+        const settings = settingsForMethod;
+        const mode = payMode(settings);
+        const out = { ref, total, currency: settings.payments_currency || "EUR",
+                      payment_status: "pending", method, mode };
+
+        if (METHODS[method].kind === "offline") {
+          await env.DB.prepare(`UPDATE registrations SET provider='manual' WHERE ref=?1`).bind(ref).run();
+          return json(out, 201);
+        }
+
+        if (mode === "preview") {
+          await env.DB.prepare(`UPDATE registrations SET provider='preview' WHERE ref=?1`).bind(ref).run();
+          out.checkout_url = `/checkout-anteprima.html?ref=${encodeURIComponent(ref)}`;
+          return json(out, 201);
+        }
+
+        try {
+          const origin = new URL(request.url).origin;
+          const { url: checkoutUrl, sessionId } = await stripeCheckout(env, settings,
+            { ref, email, total }, method, origin);
+          await env.DB.prepare(
+            `UPDATE registrations SET provider='stripe', session_id=?1 WHERE ref=?2`)
+            .bind(sessionId, ref).run();
+          out.checkout_url = checkoutUrl;
+          return json(out, 201);
+        } catch (e) {
+          /* L'iscrizione è già salvata: non la si perde perché il processore
+             non risponde. Resta in attesa e la segreteria può recuperarla. */
+          await audit(env, null, "payment_error", "registrations", ref, String(e.message).slice(0, 200));
+          return json({ ...out, payment_error: String(e.message) }, 201);
+        }
       }
+
+      /* Checkout simulato: esiste solo in modalità anteprima e rifiuta di
+         funzionare altrove, così non può diventare un modo per dichiararsi
+         pagati una volta che i pagamenti sono veri. */
+      if (seg[1] === "preview-pay" && method === "POST") {
+        const settings = await readSettings(env);
+        if (payMode(settings) !== "preview")
+          return err(403, "Il checkout simulato è disponibile solo in modalità anteprima");
+        const ref = String(body.ref || "");
+        const esito = body.esito === "ok" ? "paid" : "cancelled";
+        const r = await applyPaymentOutcome(env, ref, esito, { provider: "preview" });
+        if (!r.ok) return err(404, r.reason);
+        await audit(env, null, "preview_pay", "registrations", ref, esito);
+        return json({ ok: true, ref, payment_status: esito });
+      }
+
+      /* Stato di un'iscrizione, per la pagina di ritorno dal pagamento.
+         Restituisce il minimo indispensabile: chi conosce il riferimento non
+         deve poter leggere i dati personali dell'iscritto. */
+      if (seg[1] === "status" && method === "GET") {
+        const ref = url.searchParams.get("ref") || "";
+        const row = await env.DB.prepare(
+          `SELECT ref, payment_status, payment_method, total, currency FROM registrations WHERE ref = ?1`)
+          .bind(ref).first();
+        if (!row) return err(404, "Riferimento non trovato");
+        return json(row);
+      }
+    }
+
+    /* ---------------------------------------------------------- WEBHOOK */
+    /* Unico punto in cui un'iscrizione diventa "pagata" quando il pagamento è
+       reale. Il ritorno del browser sulla pagina di successo non conta: si
+       falsifica cambiando l'indirizzo. */
+    if (seg[0] === "payments" && seg[1] === "webhook" && seg[2] === "stripe" && method === "POST") {
+      const raw = rawBody;
+      const sig = request.headers.get("stripe-signature");
+      const secret = env.STRIPE_WEBHOOK_SECRET;
+
+      if (!await stripeSignatureValid(raw, sig, secret)) {
+        await audit(env, null, "webhook_rejected", "payments", null, "firma non valida");
+        return err(400, "Firma non valida");
+      }
+
+      let event;
+      try { event = JSON.parse(raw); } catch { return err(400, "Corpo non leggibile"); }
+
+      // I webhook vengono ritentati: lo stesso evento non va elaborato due volte.
+      const seen = await env.DB.prepare(
+        `SELECT 1 AS x FROM payment_events WHERE provider='stripe' AND event_id=?1`)
+        .bind(event.id).first();
+      if (seen) return json({ ok: true, duplicate: true });
+
+      const obj = event.data?.object || {};
+      const ref = obj.client_reference_id || obj.metadata?.ref || null;
+      const MAP = {
+        "checkout.session.completed":       "paid",
+        "checkout.session.async_payment_succeeded": "paid",
+        "checkout.session.async_payment_failed":    "failed",
+        "checkout.session.expired":         "cancelled",
+        "charge.refunded":                  "refunded"
+      };
+      const status = MAP[event.type];
+
+      let outcome = "ignored";
+      if (status && ref) {
+        const r = await applyPaymentOutcome(env, ref, status,
+          { provider: "stripe", intentId: obj.payment_intent || obj.id, sessionId: obj.id });
+        outcome = r.ok ? "processed" : "error";
+      }
+
+      await env.DB.prepare(
+        `INSERT INTO payment_events (provider, event_id, event_type, ref, status, payload)
+         VALUES ('stripe', ?1, ?2, ?3, ?4, ?5)`)
+        .bind(event.id, event.type || null, ref, outcome, raw.slice(0, 4000)).run();
+
+      return json({ ok: true, outcome });
     }
 
     /* ------------------------------------------------------------- ADMIN */
@@ -725,6 +964,27 @@ export async function onRequest(context) {
           await audit(env, user, "delete", "users", id, null);
           return json({ ok: true });
         }
+      }
+
+      /* --- stato del collegamento al processore ---
+         Risponde solo se le chiavi ci sono, mai il loro valore. */
+      if (seg[1] === "payments" && seg[2] === "health" && method === "GET") {
+        const s = await readSettings(env);
+        return json({
+          mode: payMode(s),
+          provider: s.payments_provider || "stripe",
+          secret_key: !!env.STRIPE_SECRET_KEY,
+          webhook_secret: !!env.STRIPE_WEBHOOK_SECRET,
+          methods: enabledMethods(s)
+        });
+      }
+
+      /* --- eventi ricevuti dal processore, per capire cosa è successo --- */
+      if (seg[1] === "payments" && seg[2] === "events" && method === "GET") {
+        const { results } = await env.DB.prepare(
+          `SELECT id, provider, event_id, event_type, ref, status, created_at
+             FROM payment_events ORDER BY id DESC LIMIT 100`).all();
+        return json({ results });
       }
 
       /* --- registro attività --- */

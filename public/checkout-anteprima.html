@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Pagamento (anteprima) — EEBA 2027</title>
+<script>
+(function(){ try{ var t = localStorage.getItem("eeba27.theme");
+  if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; }catch(e){} })();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  body{ display:grid; place-items:center; min-height:100vh; padding:24px; background:var(--paper-2); }
+  .co{ width:100%; max-width:440px; }
+  .co__warn{
+    display:flex; gap:11px; align-items:flex-start; background:var(--accent-soft); color:var(--accent-ink);
+    border-radius:10px; padding:13px 16px; font-size:13.5px; line-height:1.5; margin-bottom:16px;
+  }
+  .co__box{ background:var(--paper); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+  .co__h{ padding:20px 24px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:11px; }
+  .co__h b{ font-size:15px; font-weight:600; letter-spacing:-.02em; }
+  .co__h span{ margin-left:auto; font-family:var(--mono); font-size:10px; letter-spacing:.12em;
+               text-transform:uppercase; color:var(--ink-45); }
+  .co__b{ padding:24px; }
+  .co__amt{ font-size:36px; font-weight:600; letter-spacing:-.04em; margin-bottom:4px; }
+  .co__ref{ font-family:var(--mono); font-size:12px; color:var(--ink-45); margin-bottom:24px; }
+  .co__fake{ border:1px dashed var(--line-2); border-radius:10px; padding:16px; margin-bottom:22px;
+             color:var(--ink-45); font-size:13px; line-height:1.6; }
+  .co__fake b{ color:var(--ink-70); display:block; margin-bottom:6px; font-size:13.5px; }
+  .co__acts{ display:flex; flex-direction:column; gap:9px; }
+  .co__acts .btn{ width:100%; }
+  .co__foot{ text-align:center; margin-top:16px; font-size:12px; color:var(--ink-45); }
+</style>
+</head>
+<body>
+
+<div class="co">
+  <div class="co__warn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:18px;flex:none;margin-top:1px">
+      <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.2v.1"/>
+    </svg>
+    <span id="warn">Questa è una simulazione. Nessun pagamento viene addebitato e nessun dato di carta viene richiesto.
+      In produzione, al suo posto compare la pagina sicura del processore.</span>
+  </div>
+
+  <div class="co__box">
+    <div class="co__h">
+      <svg viewBox="0 0 32 32" style="width:26px;height:26px">
+        <circle cx="16" cy="16" r="14.5" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".22"/>
+        <circle cx="16" cy="16" r="10" fill="none" class="m-a" stroke-width="1.4"/>
+        <circle cx="16" cy="16" r="4.6" class="m-af"/>
+      </svg>
+      <b>EEBA 2027</b><span>Anteprima</span>
+    </div>
+
+    <div class="co__b">
+      <div class="co__amt" id="amount">—</div>
+      <div class="co__ref" id="ref">—</div>
+
+      <div class="co__fake">
+        <b id="methodName">Metodo di pagamento</b>
+        <span id="methodNote">Qui comparirebbero i campi del processore.</span>
+      </div>
+
+      <div class="co__acts">
+        <button class="btn btn--primary btn--lg" id="ok">Simula pagamento riuscito</button>
+        <button class="btn btn--ghost" id="ko">Simula annullamento</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="co__foot" id="err"></p>
+</div>
+
+<script src="payments.js"></script>
+<script>
+(function(){
+  var params = new URLSearchParams(location.search);
+  var ref = params.get("ref") || "";
+  var eur = function(c){ return new Intl.NumberFormat("it-IT",
+    { style:"currency", currency:"EUR", maximumFractionDigits:0 }).format((c||0)/100); };
+
+  document.getElementById("ref").textContent = ref;
+
+  fetch("/api/public/status?ref=" + encodeURIComponent(ref))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.error) throw new Error(d.error);
+      document.getElementById("amount").textContent = eur(d.total);
+      var m = (typeof PAYMENT_BY_CODE !== "undefined") && PAYMENT_BY_CODE[d.payment_method];
+      document.getElementById("methodName").textContent =
+        ({ card:"Carta di credito", bancontact:"Bancontact", ideal:"iDEAL",
+           paypal:"PayPal", revolut_pay:"Revolut Pay" })[d.payment_method] || d.payment_method;
+      document.getElementById("methodNote").textContent = m
+        ? "In produzione qui si apre la pagina del processore per questo metodo."
+        : "Metodo non riconosciuto.";
+    })
+    .catch(function(e){ document.getElementById("err").textContent = e.message; });
+
+  function finish(esito){
+    var btns = document.querySelectorAll("button");
+    btns.forEach(function(b){ b.disabled = true; });
+    fetch("/api/public/preview-pay", {
+      method:"POST", headers:{ "content-type":"application/json" },
+      body: JSON.stringify({ ref: ref, esito: esito })
+    })
+    .then(function(r){ return r.json().then(function(d){ return { ok:r.ok, d:d }; }); })
+    .then(function(res){
+      if (!res.ok) throw new Error(res.d.error || "Errore");
+      location.href = "/pagamento.html?ref=" + encodeURIComponent(ref) +
+                      "&esito=" + (esito === "ok" ? "ok" : "annullato");
+    })
+    .catch(function(e){
+      document.getElementById("err").textContent = e.message;
+      btns.forEach(function(b){ b.disabled = false; });
+    });
+  }
+
+  document.getElementById("ok").addEventListener("click", function(){ finish("ok"); });
+  document.getElementById("ko").addEventListener("click", function(){ finish("ko"); });
+})();
+</script>
+</body>
+</html>

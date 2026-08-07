@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Payment — EEBA 2027</title>
+<script>
+(function(){ try{ var t = localStorage.getItem("eeba27.theme");
+  if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; }catch(e){} })();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Instrument+Serif:ital@1&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  body{ display:grid; place-items:center; min-height:100vh; padding:24px; }
+  .pg{ width:100%; max-width:460px; text-align:center; }
+  .pg__ico{ width:64px; height:64px; border-radius:50%; display:grid; place-items:center; margin:0 auto 24px; }
+  .pg__ico svg{ width:30px; }
+  .pg__ico--ok{ background:#E4F4EE; color:var(--ok); }
+  .pg__ico--ko{ background:var(--paper-3); color:var(--ink-45); }
+  .pg__ico--wait{ background:var(--accent-soft); color:var(--accent-ink); }
+  .pg h1{ font-size:clamp(26px,4vw,34px); font-weight:600; letter-spacing:-.03em; margin:0 0 14px; }
+  .pg p{ color:var(--ink-70); font-size:15.5px; line-height:1.6; margin:0 0 26px; }
+  .pg__code{ font-family:var(--mono); font-size:17px; letter-spacing:.14em; background:var(--paper-2);
+             border:1px dashed var(--line-2); border-radius:8px; padding:12px 24px;
+             display:inline-block; margin-bottom:24px; }
+  .pg__acts{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .spin{ width:26px; height:26px; border:2.5px solid var(--line); border-top-color:var(--accent);
+         border-radius:50%; animation:sp .7s linear infinite; }
+  @keyframes sp{ to{ transform:rotate(360deg) } }
+</style>
+</head>
+<body>
+
+<div class="pg" id="pg">
+  <div class="pg__ico pg__ico--wait"><div class="spin"></div></div>
+  <h1 id="title">…</h1>
+  <p id="body"></p>
+</div>
+
+<script src="theme.js"></script>
+<script src="i18n.js"></script>
+<script>
+(function(){
+  var params = new URLSearchParams(location.search);
+  var ref = params.get("ref") || "";
+  var esito = params.get("esito") || "";
+
+  var code = "en";
+  try { code = localStorage.getItem("eeba27.lang") || (navigator.language||"en").slice(0,2).toLowerCase(); } catch(e){}
+  var T = (typeof I18N !== "undefined" && I18N[code]) ? I18N[code] : (typeof I18N !== "undefined" ? I18N.en : null);
+  document.documentElement.lang = code;
+
+  var t = function(path, fb){
+    if (!T) return fb;
+    var v = path.split(".").reduce(function(a,k){ return a==null?a:a[k]; }, T);
+    return typeof v === "string" ? v : fb;
+  };
+
+  var ICON_OK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m4 12.5 5.2 5.2L20 7"/></svg>';
+  var ICON_KO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7l10 10M17 7 7 17"/></svg>';
+
+  function render(status){
+    var el = document.getElementById("pg");
+    var paid = status === "paid";
+    var pending = status === "pending";
+
+    var icon = paid ? ICON_OK : ICON_KO;
+    var cls  = paid ? "pg__ico--ok" : (pending ? "pg__ico--wait" : "pg__ico--ko");
+    var title = paid ? t("reg.pay.okT","Payment received.")
+              : pending ? t("reg.pay.pending","Awaiting payment")
+              : t("reg.pay.failT","Payment not completed.");
+    var body = paid ? t("reg.pay.okP","Your place is confirmed.")
+             : pending ? t("reg.pay.offlineNote","Your registration is recorded.")
+             : t("reg.pay.failP","Nothing has been charged. Your registration is saved.");
+
+    el.innerHTML =
+      '<div class="pg__ico ' + cls + '">' + (pending ? '<div class="spin"></div>' : icon) + '</div>' +
+      '<h1>' + title + '</h1><p>' + body + '</p>' +
+      (ref ? '<div class="pg__code">' + ref + '</div>' : '') +
+      '<div class="pg__acts">' +
+        (paid ? '' : '<a class="btn btn--primary" href="/#register">' + t("reg.pay.retry","Try again") + '</a>') +
+        '<a class="btn btn--ghost" href="/">' + t("btn.back","Back") + '</a>' +
+      '</div>';
+  }
+
+  if (!ref) { render("failed"); }
+  else {
+    /* Lo stato lo chiediamo al server: quello che dice l'indirizzo non fa fede.
+       Con i pagamenti veri è il webhook a scriverlo, e può arrivare un attimo
+       dopo il ritorno del browser, quindi si riprova qualche volta. */
+    var tries = 0;
+    (function poll(){
+      fetch("/api/public/status?ref=" + encodeURIComponent(ref))
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if (d.error) return render("failed");
+          if (d.payment_status === "pending" && esito === "ok" && tries < 5) {
+            tries++; return setTimeout(poll, 1200);
+          }
+          render(d.payment_status);
+        })
+        .catch(function(){ render("failed"); });
+    })();
+  }
+})();
+</script>
+</body>
+</html>

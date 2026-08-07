@@ -19,6 +19,9 @@ public/              → sito statico, servito dal binding ASSETS
   _headers             intestazioni di sicurezza
   admin/               backoffice (SPA)
   theme.js             palette e logo, condiviso fra sito e backoffice
+  payments.js          registro dei metodi di pagamento
+  pagamento.html       pagina di ritorno dal processore
+  checkout-anteprima.html   checkout simulato (solo in modalità anteprima)
 src/
   index.js             entry del Worker: /api/* → api.js, il resto → ASSETS
   api.js               tutta l'API, router unico
@@ -28,7 +31,7 @@ schema/
   generate-seed.js     rigenera seed.sql da public/i18n.js
   migrations/          modifiche allo schema, da applicare in ordine
 tests/
-  api.test.mjs         106 test d'integrazione sull'API reale
+  api.test.mjs         144 test d'integrazione sull'API reale
   theme.test.mjs       117 controlli di contrasto sulle palette
 wrangler.toml
 ```
@@ -129,7 +132,7 @@ l'endpoint di setup si chiude da solo.
 npm run db:schema:local
 npm run db:seed:local
 npm run dev          # → http://localhost:8787
-npm test             # 223 test, nessuna dipendenza esterna
+npm test             # 261 test, nessuna dipendenza esterna
 ```
 
 I test non toccano Cloudflare: eseguono il router vero (`src/api.js`) contro un
@@ -153,6 +156,10 @@ Le schede segnano con un pallino rosso le lingue ancora vuote. Ogni salvataggio 
 
 **Tariffe ed extra** — prezzi early bird e pieni, capienza, attivazione/sospensione.
 I prezzi si inseriscono in euro e vengono salvati in centesimi.
+
+**Pagamenti** — modalità (anteprima / test / attivo), metodi accettati, stato del
+collegamento a Stripe e URL del webhook da copiare. Le chiavi segrete non stanno qui:
+vedi `PAGAMENTI.md`.
 
 **Aspetto e logo** — sei palette preimpostate più un accento personalizzato, e il logo
 dell'evento come URL o come SVG incollato. Anteprima dal vivo su fondo chiaro e scuro.
@@ -226,9 +233,6 @@ Cosa è già coperto, verificato dai test:
 
 Cosa manca prima del traffico reale:
 
-- [ ] **Pagamenti**: `POST /api/public/register` crea l'iscrizione in stato `pending`.
-      Va collegato a Stripe/Mollie creando lì la Checkout Session e restituendo l'URL,
-      con webhook che porta lo stato a `paid`. Il punto di aggancio è commentato nel codice.
 - [ ] **Email transazionali**: conferma, fattura, QR del badge (Resend, Postmark o MailChannels).
 - [ ] **Recupero password** via email (oggi la reimposta un amministratore).
 - [ ] **Backup del D1** programmati (`wrangler d1 export`).

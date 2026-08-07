@@ -14,8 +14,8 @@
     "db:seed:local": "wrangler d1 execute eeba-2027 --file=schema/seed.sql --local",
     "test:api": "node tests/api.test.mjs",
     "test:theme": "node tests/theme.test.mjs",
-    "db:migrate": "wrangler d1 execute eeba-2027 --file=schema/migrations/001-flexible-days-theme.sql --remote",
-    "db:migrate:local": "wrangler d1 execute eeba-2027 --file=schema/migrations/001-flexible-days-theme.sql --local"
+    "db:migrate": "wrangler d1 execute eeba-2027 --remote --file=schema/migrations/001-flexible-days-theme.sql && wrangler d1 execute eeba-2027 --remote --file=schema/migrations/002-payments.sql",
+    "db:migrate:local": "wrangler d1 execute eeba-2027 --local --file=schema/migrations/001-flexible-days-theme.sql && wrangler d1 execute eeba-2027 --local --file=schema/migrations/002-payments.sql"
   },
   "devDependencies": {
     "wrangler": "^4"

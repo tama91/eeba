@@ -46,7 +46,12 @@ const settings = {
   theme_preset:     "clinical-blue",
   theme_accent:     "",
   logo_url:         "",
-  logo_svg:         ""
+  logo_svg:         "",
+  payments_provider:"stripe",
+  payments_mode:    "preview",
+  payments_methods: "card,bancontact,ideal,paypal,revolut_pay,sepa,inv",
+  payments_currency:"EUR",
+  invoice_note:     ""
 };
 for (const [k, v] of Object.entries(settings)) {
   W(`INSERT INTO settings (skey, svalue) VALUES (${q(k)}, ${q(v)});`);

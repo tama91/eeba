@@ -969,6 +969,150 @@ VIEWS.pricing = async function () {
   }
 };
 
+/* ======================================================== PAGAMENTI */
+VIEWS.payments = async function () {
+  const s = await api("/admin/settings");
+  const cur = Object.fromEntries(s.results.map(r => [r.skey, r.svalue]));
+  const ro = !canWrite();
+  const mode = ["preview", "test", "live"].includes(cur.payments_mode) ? cur.payments_mode : "preview";
+  const on = String(cur.payments_methods || "card,sepa,inv").split(",").map(x => x.trim()).filter(Boolean);
+  const webhookUrl = location.origin + "/api/payments/webhook/stripe";
+
+  const MODES = {
+    preview: { t: "Anteprima", d: "Nessun processore collegato. Il checkout è simulato: serve a provare l'esperienza." },
+    test:    { t: "Test",      d: "Stripe in modalità test. Servono le chiavi di test e le carte di prova." },
+    live:    { t: "Attivo",    d: "Pagamenti reali. Il denaro arriva sul conto collegato a Stripe." }
+  };
+
+  setHeader("Pagamenti", "Metodi accettati e collegamento al processore", []);
+
+  $("#view").innerHTML = `
+    ${mode === "preview" ? `<div class="alert alert--info">
+      <b>Modalità anteprima.</b> Nessun pagamento reale viene incassato: chi si iscrive vede un
+      checkout simulato. Per attivare Stripe segui <code>PAGAMENTI.md</code> nel repository.</div>` : ""}
+    ${mode === "live" ? `<div class="alert alert--ok">
+      <b>Pagamenti attivi.</b> Le transazioni sono reali.</div>` : ""}
+
+    <div class="grid-appearance">
+      <div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card__h"><h3>Modalità</h3></div>
+          <div class="card__b">
+            <div class="presets">
+              ${Object.entries(MODES).map(([id, m]) => `
+                <button type="button" class="preset ${mode === id ? "is-on" : ""}" data-mode="${id}" ${ro ? "disabled" : ""}>
+                  <b>${m.t}</b><span class="preset__hex" style="white-space:normal;line-height:1.5">${m.d}</span>
+                </button>`).join("")}
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="card__h"><h3>Metodi accettati</h3>
+            <span class="pill pill--plain">${on.length} attivi</span></div>
+          <div class="tblwrap"><table>
+            <thead><tr><th style="width:44px"></th><th>Metodo</th><th>Tipo</th><th>Note</th><th style="width:90px">Attivo</th></tr></thead>
+            <tbody>${PAYMENT_METHODS.map(m => `
+              <tr>
+                <td style="color:var(--ink-45)"><span style="display:block;width:20px">${PAYMENT_ICONS[m.icon] || ""}</span></td>
+                <td><b style="font-weight:500">${esc(label("reg.pm." + m.code, m.code))}</b></td>
+                <td>${m.kind === "online"
+                      ? `<span class="pill pill--admin">Immediato</span>`
+                      : `<span class="pill pill--plain">Differito</span>`}</td>
+                <td class="muted">${esc(m.note?.it || "")}</td>
+                <td><label class="switch"><input type="checkbox" data-m="${m.code}"
+                     ${on.includes(m.code) ? "checked" : ""} ${ro ? "disabled" : ""}></label></td>
+              </tr>`).join("")}
+            </tbody></table></div>
+          <div class="card__b" style="border-top:1px solid var(--line)">
+            <p class="hint" style="margin:0">
+              I metodi <b>immediati</b> passano dal processore e segnano l'iscrizione come pagata da soli.
+              I <b>differiti</b> — bonifico e fattura — lasciano l'iscrizione in attesa finché non la segni
+              pagata dalla scheda dell'iscritto. Per un congresso medico sono spesso la quota maggiore:
+              conviene tenerli accesi anche quando Stripe è attivo.</p>
+          </div>
+        </div>
+
+        ${ro ? "" : `<button class="btn btn--primary" id="savePayments">Salva impostazioni pagamenti</button>`}
+      </div>
+
+      <div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card__h"><h3>Collegamento a Stripe</h3></div>
+          <div class="card__b">
+            <dl class="kv" style="margin:0 0 18px">
+              <dt>Processore</dt><dd>Stripe</dd>
+              <dt>Modalità</dt><dd>${MODES[mode].t}</dd>
+              <dt>Valuta</dt><dd>${esc(cur.payments_currency || "EUR")}</dd>
+              <dt>Chiave API</dt><dd id="keyState" class="muted">verifica in corso…</dd>
+            </dl>
+            <div class="f" style="margin:0">
+              <label>URL del webhook — da incollare su Stripe</label>
+              <div style="display:flex; gap:8px">
+                <input value="${webhookUrl}" readonly style="font-family:var(--mono); font-size:12px">
+                <button class="btn btn--subtle btn--sm" id="copyHook">Copia</button>
+              </div>
+              <p class="hint">Eventi da selezionare: <code>checkout.session.completed</code>,
+                 <code>checkout.session.expired</code>, <code>charge.refunded</code>.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__h"><h3>Dove stanno le chiavi</h3></div>
+          <div class="card__b">
+            <p class="hint" style="margin:0 0 12px">
+              Le chiavi segrete <b>non stanno in questa pagina e non stanno nel database</b>,
+              di proposito: chiunque abbia il ruolo redattore può leggere il database, e non
+              deve poter leggere le credenziali con cui si incassa.</p>
+            <p class="hint" style="margin:0">
+              Vivono nei secret del Worker, dove nessuno le rilegge più dopo averle inserite:</p>
+            <pre style="background:var(--paper-2); border:1px solid var(--line); border-radius:8px;
+                        padding:12px 14px; font-size:11.5px; overflow-x:auto; margin:10px 0 0"><code>npx wrangler secret put STRIPE_SECRET_KEY
+npx wrangler secret put STRIPE_WEBHOOK_SECRET</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  /* Stato della chiave: lo chiediamo al server, che risponde solo sì/no —
+     la chiave non viaggia mai verso il browser. */
+  api("/admin/payments/health").then(h => {
+    const el = $("#keyState");
+    if (!el) return;
+    if (h.mode === "preview") { el.innerHTML = `<span class="pill pill--plain">non necessaria in anteprima</span>`; return; }
+    el.innerHTML = h.secret_key
+      ? `<span class="pill pill--paid">configurata</span>${h.webhook_secret ? "" : ` <span class="pill pill--pending">manca quella del webhook</span>`}`
+      : `<span class="pill pill--cancelled">mancante</span>`;
+  }).catch(() => {});
+
+  let selMode = mode;
+  $$("[data-mode]").forEach(b => b.addEventListener("click", () => {
+    selMode = b.dataset.mode;
+    $$("[data-mode]").forEach(x => x.classList.toggle("is-on", x === b));
+  }));
+
+  $("#copyHook")?.addEventListener("click", () => {
+    navigator.clipboard?.writeText(webhookUrl).then(() => toast("URL copiato"), () => {});
+  });
+
+  $("#savePayments")?.addEventListener("click", async () => {
+    const methods = $$("[data-m]").filter(i => i.checked).map(i => i.dataset.m);
+    if (!methods.length) return toast("Almeno un metodo deve restare attivo", true);
+    if (selMode !== "preview" && !methods.some(m => PAYMENT_BY_CODE[m]?.kind === "offline"))
+      toast("Nessun metodo differito attivo: chi paga per fattura non potrà iscriversi");
+    try {
+      await apiJson("/admin/settings", "PATCH", {
+        payments_mode: selMode,
+        payments_methods: methods.join(",")
+      });
+      await refreshConfig();
+      toast("Pagamenti aggiornati");
+      route();
+    } catch (e) { toast(e.message, true); }
+  });
+};
+
 /* ========================================================== ASPETTO */
 VIEWS.appearance = async function () {
   const s = await api("/admin/settings");

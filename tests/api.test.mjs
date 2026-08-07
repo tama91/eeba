@@ -33,6 +33,10 @@ function makeDB() {
   const db = new DatabaseSync(":memory:");
   db.exec(readFileSync(join(ROOT, "schema/schema.sql"), "utf8"));
   db.exec(readFileSync(join(ROOT, "schema/seed.sql"), "utf8"));
+  // Le migrazioni girano dopo, come in un aggiornamento reale: così il test
+  // verifica anche che siano applicabili e che non calpestino il seed.
+  for (const m of ["001-flexible-days-theme.sql", "002-payments.sql"])
+    db.exec(readFileSync(join(ROOT, "schema/migrations", m), "utf8"));
   return {
     _raw: db,
     prepare: sql => new Stmt(db, sql),
@@ -413,6 +417,162 @@ group("Il ruolo viaggia come codice, non come etichetta");
   check("iscrizione con codice ruolo", r.status === 201, JSON.stringify(r.data));
   const row = DB._raw.prepare("SELECT role FROM registrations WHERE email='jan@uz.be'").get();
   check("nel database c'è il codice, non il testo tradotto", row.role === "r2", row.role);
+}
+
+group("Pagamenti — modalità anteprima");
+{
+  let r = await call("/public/content", { useCookie: false });
+  check("i metodi attivi arrivano al sito", Array.isArray(r.data.payments?.methods) && r.data.payments.methods.length > 3,
+        JSON.stringify(r.data.payments));
+  check("modalità anteprima", r.data.payments.mode === "preview", r.data.payments?.mode);
+
+  const body = { first_name:"Paul", last_name:"Dupont", email:"paul@chu.fr", org:"CHU",
+                 tier_code:"tra", payment_method:"card", consent_terms:true, consent_gdpr:true };
+  r = await call("/public/register", { method:"POST", body, useCookie:false });
+  check("iscrizione con carta → checkout simulato", r.status === 201 && /checkout-anteprima/.test(r.data.checkout_url || ""),
+        JSON.stringify(r.data));
+  const refPreview = r.data.ref;
+
+  r = await call(`/public/status?ref=${refPreview}`, { useCookie: false });
+  check("stato iniziale in attesa", r.data.payment_status === "pending", r.data.payment_status);
+  check("lo stato non espone dati personali",
+        !("email" in r.data) && !("first_name" in r.data), Object.keys(r.data).join(","));
+
+  r = await call("/public/preview-pay", { method:"POST", body:{ ref: refPreview, esito:"ok" }, useCookie:false });
+  check("il checkout simulato segna pagato", r.status === 200, JSON.stringify(r.data));
+  r = await call(`/public/status?ref=${refPreview}`, { useCookie: false });
+  check("stato aggiornato a pagato", r.data.payment_status === "paid", r.data.payment_status);
+
+  r = await call("/public/preview-pay", { method:"POST", body:{ ref:"EEBA27-INESISTENTE", esito:"ok" }, useCookie:false });
+  check("riferimento inventato → 404", r.status === 404, r.status);
+
+  // metodo differito: nessun checkout, resta in attesa
+  r = await call("/public/register", { method:"POST", useCookie:false,
+    body:{ ...body, email:"ufficio@ospedale.it", payment_method:"inv" } });
+  check("fattura istituzionale: nessun checkout", r.status === 201 && !r.data.checkout_url, JSON.stringify(r.data));
+  const rowInv = DB._raw.prepare("SELECT payment_method, provider, payment_status FROM registrations WHERE email='ufficio@ospedale.it'").get();
+  check("fattura registrata come differita",
+        rowInv.payment_method === "inv" && rowInv.provider === "manual" && rowInv.payment_status === "pending",
+        JSON.stringify(rowInv));
+
+  // metodo non attivo: si ricade sul primo disponibile invece di accettarlo
+  await call("/admin/settings", { method:"PATCH", body:{ payments_methods:"card,inv" } });
+  r = await call("/public/register", { method:"POST", useCookie:false,
+    body:{ ...body, email:"x@y.it", payment_method:"revolut_pay" } });
+  const rowX = DB._raw.prepare("SELECT payment_method FROM registrations WHERE email='x@y.it'").get();
+  check("un metodo disattivato non viene accettato", rowX.payment_method !== "revolut_pay", rowX.payment_method);
+  await call("/admin/settings", { method:"PATCH", body:{ payments_methods:"card,bancontact,ideal,paypal,revolut_pay,sepa,inv" } });
+}
+
+group("Pagamenti — il checkout simulato non sopravvive alla produzione");
+{
+  await call("/admin/settings", { method: "PATCH", body: { payments_mode: "live" } });
+  const r = await call("/public/preview-pay", { method:"POST", body:{ ref:"EEBA27-QUALSIASI", esito:"ok" }, useCookie:false });
+  check("in modalità live il checkout simulato è chiuso → 403", r.status === 403, r.status);
+
+  const body = { first_name:"A", last_name:"B", email:"live@test.it", org:"O", tier_code:"tra",
+                 payment_method:"card", consent_terms:true, consent_gdpr:true };
+  const reg = await call("/public/register", { method:"POST", body, useCookie:false });
+  check("senza chiave Stripe l'iscrizione si salva comunque", reg.status === 201, reg.status);
+  check("e segnala il problema invece di fingere", !!reg.data.payment_error, JSON.stringify(reg.data).slice(0, 120));
+  const row = DB._raw.prepare("SELECT payment_status FROM registrations WHERE email='live@test.it'").get();
+  check("l'iscrizione resta in attesa, non pagata", row.payment_status === "pending", row.payment_status);
+  await call("/admin/settings", { method: "PATCH", body: { payments_mode: "preview" } });
+}
+
+group("Webhook — firma e idempotenza");
+{
+  const SECRET = "whsec_test_1234567890";
+  const encU = new TextEncoder();
+  async function sign(payload, ts) {
+    const key = await crypto.subtle.importKey("raw", encU.encode(SECRET),
+      { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const sig = await crypto.subtle.sign("HMAC", key, encU.encode(`${ts}.${payload}`));
+    return `t=${ts},v1=` + [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  async function hook(payload, header) {
+    const request = new Request(BASE + "/api/payments/webhook/stripe", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: BASE, ...(header ? { "stripe-signature": header } : {}) },
+      body: payload
+    });
+    const res = await onRequest({ request, env: { DB, STRIPE_WEBHOOK_SECRET: SECRET },
+                                  params: { path: ["payments", "webhook", "stripe"] } });
+    return { status: res.status, data: await res.json() };
+  }
+
+  // un'iscrizione da far pagare dal webhook
+  const reg = await call("/public/register", { method: "POST", useCookie: false, body: {
+    first_name:"Web", last_name:"Hook", email:"hook@test.it", org:"O", tier_code:"tra",
+    payment_method:"card", consent_terms:true, consent_gdpr:true } });
+  const ref = reg.data.ref;
+
+  const payload = JSON.stringify({ id:"evt_1", type:"checkout.session.completed",
+    data:{ object:{ id:"cs_1", client_reference_id: ref, payment_intent:"pi_1" } } });
+  const now = Math.floor(Date.now() / 1000);
+
+  let r = await hook(payload, null);
+  check("senza firma → 400", r.status === 400, r.status);
+  r = await hook(payload, `t=${now},v1=deadbeef`);
+  check("firma sbagliata → 400", r.status === 400, r.status);
+  r = await hook(payload, await sign(payload, now - 3600));
+  check("firma valida ma vecchia di un'ora → 400", r.status === 400, r.status);
+  r = await hook(payload + " ", await sign(payload, now));
+  check("corpo alterato dopo la firma → 400", r.status === 400, r.status);
+
+  r = await hook(payload, await sign(payload, now));
+  check("firma valida → 200", r.status === 200, JSON.stringify(r.data));
+  let row = DB._raw.prepare("SELECT payment_status, paid_at, intent_id FROM registrations WHERE ref=?").get(ref);
+  check("il webhook segna pagato", row.payment_status === "paid", JSON.stringify(row));
+  check("registra l'identificativo del pagamento", row.intent_id === "pi_1", row.intent_id);
+
+  r = await hook(payload, await sign(payload, now));
+  check("lo stesso evento ripetuto non viene rielaborato", r.data.duplicate === true, JSON.stringify(r.data));
+
+  // un evento di scadenza su un'iscrizione già pagata non deve annullarla
+  const expired = JSON.stringify({ id:"evt_2", type:"checkout.session.expired",
+    data:{ object:{ id:"cs_1", client_reference_id: ref } } });
+  await hook(expired, await sign(expired, now));
+  row = DB._raw.prepare("SELECT payment_status FROM registrations WHERE ref=?").get(ref);
+  check("un'iscrizione pagata non torna indietro", row.payment_status === "paid", row.payment_status);
+
+  // il rimborso invece deve passare
+  const refunded = JSON.stringify({ id:"evt_3", type:"charge.refunded",
+    data:{ object:{ id:"ch_1", metadata:{ ref } } } });
+  await hook(refunded, await sign(refunded, now));
+  row = DB._raw.prepare("SELECT payment_status, refunded_at FROM registrations WHERE ref=?").get(ref);
+  check("il rimborso viene applicato", row.payment_status === "refunded" && !!row.refunded_at, JSON.stringify(row));
+
+  const ev = DB._raw.prepare("SELECT COUNT(*) AS n FROM payment_events").get();
+  check("gli eventi vengono archiviati", ev.n >= 3, ev.n);
+}
+
+group("Pagamenti — configurazione dal backoffice");
+{
+  let r = await call("/admin/payments/health");
+  check("stato del collegamento leggibile", r.status === 200 && "secret_key" in r.data, JSON.stringify(r.data));
+  check("la chiave non viene mai restituita", !JSON.stringify(r.data).includes("sk_"), JSON.stringify(r.data));
+  check("dice solo se la chiave c'è", r.data.secret_key === false, String(r.data.secret_key));
+
+  const cases = [
+    ["payments_mode", "test", 200, "modalità test accettata"],
+    ["payments_mode", "produzione", 400, "modalità inventata rifiutata"],
+    ["payments_methods", "card,paypal", 200, "elenco metodi valido"],
+    ["payments_methods", "bitcoin", 400, "metodo sconosciuto rifiutato"],
+    ["payments_methods", "", 400, "elenco vuoto rifiutato"],
+    ["payments_currency", "EUR", 200, "valuta valida"],
+    ["payments_currency", "euro", 400, "valuta non valida rifiutata"],
+    ["payments_provider", "paypal", 400, "processore non supportato rifiutato"]
+  ];
+  for (const [k, v, expect, name] of cases) {
+    const res = await call("/admin/settings", { method: "PATCH", body: { [k]: v } });
+    check(name, res.status === expect, `atteso ${expect}, ottenuto ${res.status}`);
+  }
+  await call("/admin/settings", { method: "PATCH", body: {
+    payments_mode: "preview", payments_methods: "card,bancontact,ideal,paypal,revolut_pay,sepa,inv" } });
+
+  r = await call("/admin/payments/events");
+  check("elenco eventi accessibile", r.status === 200 && Array.isArray(r.data.results), r.status);
 }
 
 group("Cambio password e chiusura sessione");
