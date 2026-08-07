@@ -6,7 +6,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "seed": "node schema/generate-seed.js",
-    "test": "node tests/api.test.mjs && node tests/theme.test.mjs",
+    "test": "node tests/api.test.mjs && node tests/theme.test.mjs && node tests/frontend.test.mjs",
     "db:create": "wrangler d1 create eeba-2027",
     "db:schema": "wrangler d1 execute eeba-2027 --file=schema/schema.sql --remote",
     "db:seed": "wrangler d1 execute eeba-2027 --file=schema/seed.sql --remote",
@@ -15,7 +15,10 @@
     "test:api": "node tests/api.test.mjs",
     "test:theme": "node tests/theme.test.mjs",
     "db:migrate": "wrangler d1 execute eeba-2027 --remote --file=schema/migrations/001-flexible-days-theme.sql && wrangler d1 execute eeba-2027 --remote --file=schema/migrations/002-payments.sql",
-    "db:migrate:local": "wrangler d1 execute eeba-2027 --local --file=schema/migrations/001-flexible-days-theme.sql && wrangler d1 execute eeba-2027 --local --file=schema/migrations/002-payments.sql"
+    "db:migrate:local": "wrangler d1 execute eeba-2027 --local --file=schema/migrations/001-flexible-days-theme.sql && wrangler d1 execute eeba-2027 --local --file=schema/migrations/002-payments.sql",
+    "test:frontend": "node tests/frontend.test.mjs",
+    "db:topup": "wrangler d1 execute eeba-2027 --remote --file=schema/seed-topup.sql",
+    "db:topup:local": "wrangler d1 execute eeba-2027 --local --file=schema/seed-topup.sql"
   },
   "devDependencies": {
     "wrangler": "^4"

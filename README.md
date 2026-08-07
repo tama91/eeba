@@ -33,6 +33,7 @@ schema/
 tests/
   api.test.mjs         144 test d'integrazione sull'API reale
   theme.test.mjs       117 controlli di contrasto sulle palette
+  frontend.test.mjs    16 controlli statici sul codice del browser
 wrangler.toml
 ```
 
@@ -62,11 +63,17 @@ npm run db:schema
 npm run db:seed
 ```
 
-Se il database esiste già da prima, applica anche le migrazioni:
+Se il database esiste già da prima, applica le migrazioni e aggiungi le chiavi nuove:
 
 ```bash
 npm run db:migrate
+npm run db:topup
 ```
+
+⚠️ **Non usare `db:seed` su un database già in uso.** Fa `DELETE` prima di inserire:
+cancellerebbe le traduzioni corrette a mano, il logo, i prezzi ritoccati.
+`db:topup` fa lo stesso lavoro con `INSERT OR IGNORE`, quindi aggiunge solo ciò
+che manca. `seed.sql` serve solo al primo avvio.
 
 Il seed importa nel database tutto ciò che oggi sta in `i18n.js`: 236 chiavi di traduzione
 nelle 4 lingue, 20 sessioni di programma, 5 tariffe, 4 extra, relatori e sponsor segnaposto.
@@ -132,7 +139,7 @@ l'endpoint di setup si chiude da solo.
 npm run db:schema:local
 npm run db:seed:local
 npm run dev          # → http://localhost:8787
-npm test             # 261 test, nessuna dipendenza esterna
+npm test             # 277 test, nessuna dipendenza esterna
 ```
 
 I test non toccano Cloudflare: eseguono il router vero (`src/api.js`) contro un

@@ -17,7 +17,8 @@ let T = I18N.en;
 
 /* Contenuti caricati dal backoffice. Se l'API non risponde il sito continua
    a funzionare con i valori di i18n.js: nessuna schermata bianca. */
-const DATA = { live: false, settings: {}, programme: null, speakers: null, sponsors: null, tiers: null, addons: null };
+const DATA = { live: false, settings: {}, payments: null, programme: null,
+               speakers: null, sponsors: null, tiers: null, addons: null };
 
 const pick = obj => (obj && (obj[lang] || obj.en || Object.values(obj).find(Boolean))) || "";
 
@@ -58,6 +59,7 @@ async function hydrate() {
         if (values[code] && String(values[code]).trim()) setPath(I18N[code], key, values[code]);
 
     DATA.settings  = d.settings || {};
+    DATA.payments  = d.payments || null;
     DATA.programme = d.programme || null;
     DATA.speakers  = d.speakers || null;
     DATA.sponsors  = d.sponsors || null;
@@ -683,7 +685,6 @@ async function init() {
   buildLangMenu();
   initTheme();
   initHeader();
-  initTabs();
 
   $$("[data-go]").forEach(b => b.addEventListener("click", () => goStep(Number(b.dataset.go))));
   $("#sumCta").addEventListener("click", () => (state.step === 3 ? completeBooking() : goStep(Math.min(state.step + 1, 4))));

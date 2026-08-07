@@ -136,3 +136,39 @@ W("-- Nessun utente creato: il primo admin si registra da /admin (setup iniziale
 
 fs.writeFileSync(path.join(__dirname, "seed.sql"), out.join("\n") + "\n");
 console.log(`seed.sql generato — ${out.length} righe, ${keys.length} chiavi di traduzione.`);
+
+/* ==========================================================================
+   seed-topup.sql — per un database già in uso.
+
+   seed.sql fa DELETE prima di inserire: su un database vivo cancellerebbe
+   traduzioni corrette a mano, il logo, i prezzi ritoccati. Questo file invece
+   usa INSERT OR IGNORE: aggiunge solo ciò che manca e non tocca nulla di
+   esistente. È quello da usare dopo aver aggiunto chiavi nuove al codice.
+   ========================================================================== */
+const up = [];
+const U = s => up.push(s);
+
+U("-- ==========================================================================");
+U("-- EEBA 2027 — aggiunta delle sole chiavi mancanti (generato)");
+U("-- Non cancella niente: le modifiche fatte dal backoffice restano.");
+U("-- Applicare con:  npm run db:topup");
+U("-- ==========================================================================\n");
+
+U("-- Impostazioni introdotte dopo il primo avvio");
+for (const [k, v] of Object.entries(settings))
+  U(`INSERT OR IGNORE INTO settings (skey, svalue) VALUES (${q(k)}, ${q(v)});`);
+
+U("\n-- Chiavi di traduzione nuove; quelle già presenti non vengono toccate");
+keys.forEach(k => {
+  U(`INSERT OR IGNORE INTO translations (tkey, value_json) VALUES (${q(k)}, ${json(bag(T => at(T, k)))});`);
+});
+
+U("\n-- Chiavi rimaste da versioni precedenti del codice e ora inutilizzate");
+["prog.d1", "prog.d1d", "prog.d2", "prog.d2d", "prog.d3", "prog.d3d",
+ "prog.tagKey", "prog.tagLab", "prog.tagSoc", "prog.tagSym", "prog.tagFree",
+ "prog.tagInd", "prog.tagWs"].forEach(k => {
+  U(`DELETE FROM translations WHERE tkey = ${q(k)};`);
+});
+
+fs.writeFileSync(path.join(__dirname, "seed-topup.sql"), up.join("\n") + "\n");
+console.log(`seed-topup.sql generato — ${up.length} righe, aggiunge solo il mancante.`);
