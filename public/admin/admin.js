@@ -952,6 +952,28 @@ VIEWS.pricing = async function () {
             <td class="rowact">${canWrite() ? `<button class="btn btn--subtle btn--sm" data-addon="${a.id}">Modifica</button>` : ""}</td>
           </tr>`).join("")}
         </tbody></table></div>
+    </div>
+
+    <div class="card">
+      <div class="card__h"><h3>Opzioni di menu</h3>
+        <span class="pill pill--plain">${meals.results.filter(m => m.active).length} attive</span></div>
+      <div class="card__b" style="padding-bottom:4px">
+        <p class="hint" style="margin:0">
+          Sostituiscono il vecchio campo libero sulle esigenze alimentari. Scegliere un menu è
+          un'ordinazione, non una dichiarazione sulla propria salute o religione: raccoglie molto
+          meno di quanto raccoglieva una casella di testo.</p>
+      </div>
+      <div class="tblwrap"><table>
+        <thead><tr><th>Codice</th><th>Nome (IT)</th><th>Ordine</th><th>Stato</th><th></th></tr></thead>
+        <tbody>${meals.results.length ? meals.results.map(m => `
+          <tr>
+            <td class="mono">${esc(m.code)}</td>
+            <td>${esc(m.name_json.it || m.name_json.en || "—")}</td>
+            <td class="num muted">${m.sort}</td>
+            <td>${m.active ? `<span class="pill pill--paid">Attivo</span>` : `<span class="pill pill--refunded">Sospeso</span>`}</td>
+            <td class="rowact">${canWrite() ? `<button class="btn btn--subtle btn--sm" data-meal="${m.id}">Modifica</button>` : ""}</td>
+          </tr>`).join("") : `<tr><td colspan="5"><div class="empty" style="padding:28px">Nessuna opzione di menu</div></td></tr>`}
+        </tbody></table></div>
     </div>`;
 
   $$("[data-meal]").forEach(b => b.addEventListener("click", () =>

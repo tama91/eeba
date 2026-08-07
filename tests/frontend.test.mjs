@@ -206,6 +206,25 @@ group("Coerenza fra browser e server");
   check("il server non conosce metodi che il browser ignora", extra.length === 0, extra.join(", "));
 }
 
+/* ------------------------------------ gestori senza niente da gestire */
+/* Un `$$("[data-x]")` che aggancia i clic ma nessun markup che produca
+   `data-x="…"` significa una tabella che non viene mai disegnata: il pulsante
+   "crea" funziona, l'elenco resta vuoto, e sembra che il salvataggio non
+   funzioni. È successo con le opzioni di menu. */
+group("Gestori collegati a markup esistente");
+for (const [file, companions] of [
+  ["public/admin/admin.js", ["public/admin/index.html"]],
+  ["public/app.js",         ["public/index.html"]]
+]) {
+  const src = read(file);
+  // il markup può stare nel JS o nella pagina che lo carica
+  const markup = [src, ...companions.map(read)].join("\n");
+  const handled = [...new Set([...src.matchAll(/\$\$\(\s*["'`]\[data-([a-zA-Z0-9-]+)\]["'`]/g)].map(m => m[1]))];
+  const orphan = handled.filter(attr => !new RegExp(`data-${attr}=`).test(markup));
+  check(`${file}: ${handled.length} attributi agganciati, tutti prodotti`,
+        orphan.length === 0, orphan.map(a => "data-" + a).join(", "));
+}
+
 /* ------------------------------------------------------- pagine legali */
 group("Pagine legali");
 {
