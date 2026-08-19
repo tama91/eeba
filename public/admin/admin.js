@@ -913,74 +913,215 @@ VIEWS.sponsors = async function () {
 };
 
 /* ======================================================= TRADUZIONI */
+/* Le sezioni del sito con un nome che significhi qualcosa per chi traduce.
+   La chiave tecnica (hero.t1, foot.l.spon) resta disponibile ma non è più
+   quello su cui si ragiona. */
+const TR_GROUPS = [
+  { id: "meta",      m: /^meta\./,        n: "Titolo della pagina",        d: "Compare nella scheda del browser e nei risultati di ricerca" },
+  { id: "nav",       m: /^nav\./,         n: "Menu in alto",               d: "Le voci della barra di navigazione" },
+  { id: "btn",       m: /^btn\./,         n: "Pulsanti",                   d: "Testi che compaiono su più pagine" },
+  { id: "hero",      m: /^hero\./,        n: "Apertura della home",        d: "Il titolo grande e le prime righe" },
+  { id: "count",     m: /^count\./,       n: "Conto alla rovescia",        d: "Giorni, ore, minuti" },
+  { id: "ticker",    m: /^ticker\./,      n: "Striscia scorrevole",        d: "Le voci separate dalla barra verticale |" },
+  { id: "stats",     m: /^stats\./,       n: "Numeri in evidenza",         d: "I quattro riquadri sotto la striscia. {days} e {sessions} si calcolano da soli" },
+  { id: "about",     m: /^about\./,       n: "Sezione «Il congresso»",     d: "" },
+  { id: "focus",     m: /^focus\./,       n: "Sezione «Tema»",             d: "" },
+  { id: "prog",      m: /^prog\./,        n: "Programma",                  d: "Intestazioni e tipi di sessione. Le singole sessioni si modificano dalla pagina Programma" },
+  { id: "spk",       m: /^spk\./,         n: "Relatori",                   d: "" },
+  { id: "venue",     m: /^venue\./,       n: "Sede e viaggio",             d: "" },
+  { id: "regRoles",  m: /^reg\.roles\./,  n: "Ruoli dei delegati",         d: "L'elenco a tendina nel modulo di iscrizione" },
+  { id: "regFields", m: /^reg\.f\./,      n: "Campi del modulo",           d: "Etichette e suggerimenti dei campi da compilare" },
+  { id: "regPm",     m: /^reg\.pm\./,     n: "Metodi di pagamento",        d: "" },
+  { id: "regPay",    m: /^reg\.pay\./,    n: "Esito del pagamento",        d: "Cosa legge chi ha appena pagato" },
+  { id: "reg",       m: /^reg\./,         n: "Iscrizione",                 d: "Testi della sezione iscrizioni" },
+  { id: "abs",       m: /^abs\./,         n: "Call for abstract",          d: "" },
+  { id: "faq",       m: /^faq\./,         n: "Domande frequenti",          d: "" },
+  { id: "spon",      m: /^spon\./,        n: "Sponsor",                    d: "" },
+  { id: "band",      m: /^band\./,        n: "Richiamo finale",            d: "La fascia scura in fondo alla home" },
+  { id: "foot",      m: /^foot\./,        n: "Piè di pagina",              d: "" },
+  { id: "other",     m: /./,              n: "Altro",                      d: "" }
+];
+const trGroupOf = key => TR_GROUPS.find(g => g.m.test(key)) || TR_GROUPS[TR_GROUPS.length - 1];
+
+const LANG_NAME = { en:"Inglese", it:"Italiano", nl:"Olandese", fr:"Francese",
+                    de:"Tedesco", es:"Spagnolo", pt:"Portoghese" };
+const langName = c => LANG_NAME[c] || c.toUpperCase();
+
 VIEWS.translations = async function () {
   const d = await api("/admin/translations");
-  let filter = "", onlyMissing = false;
+  const rows = d.results;
 
-  setHeader("Traduzioni", `${d.results.length} chiavi — ogni modifica è online al prossimo caricamento`, []);
+  /* Si traduce una lingua per volta, con un'altra accanto come riferimento:
+     è come lavora chiunque traduca davvero, e toglie di mezzo le quattro
+     schede da aprire una a una. */
+  let from = LANGS.includes("it") ? "it" : LANGS[0];
+  let to   = LANGS.find(l => l !== from) || LANGS[0];
+  let q = "", onlyMissing = false;
 
-  $("#view").innerHTML = `
-    <div class="filters">
-      <input type="search" id="tq" placeholder="Cerca per chiave o per testo…">
-      <label class="switch"><input type="checkbox" id="tMissing"> Solo con lingue mancanti</label>
-      <span class="spacer"></span><span class="muted" id="tCount"></span>
-    </div>
-    <div class="card"><div class="tblwrap"><table>
-      <thead><tr><th style="width:210px">Chiave</th>${LANGS.map(l => `<th>${l.toUpperCase()}</th>`).join("")}<th></th></tr></thead>
-      <tbody id="tRows"></tbody>
-    </table></div></div>`;
+  const val = (r, l) => String(r.value_json?.[l] || "");
+  const done = l => rows.filter(r => val(r, l).trim()).length;
 
-  function render() {
-    const q = filter.toLowerCase();
-    const rows = d.results.filter(r => {
-      const missing = LANGS.some(l => !String(r.value_json[l] || "").trim());
-      if (onlyMissing && !missing) return false;
-      if (!q) return true;
-      return r.tkey.toLowerCase().includes(q) ||
-             LANGS.some(l => String(r.value_json[l] || "").toLowerCase().includes(q));
+  function draw() {
+    const term = q.trim().toLowerCase();
+    const visible = rows.filter(r => {
+      if (onlyMissing && val(r, to).trim()) return false;
+      if (!term) return true;
+      return val(r, from).toLowerCase().includes(term) ||
+             val(r, to).toLowerCase().includes(term) ||
+             r.tkey.toLowerCase().includes(term);
     });
-    $("#tCount").textContent = `${rows.length} di ${d.results.length}`;
-    $("#tRows").innerHTML = rows.length ? rows.map(r => `
-      <tr>
-        <td class="mono" style="color:var(--accent)">${esc(r.tkey)}</td>
-        ${LANGS.map(l => {
-          const v = String(r.value_json[l] || "");
-          return `<td class="${v ? "" : "muted"}" style="max-width:230px">${v ? esc(v.slice(0, 70)) + (v.length > 70 ? "…" : "") : "— mancante —"}</td>`;
-        }).join("")}
-        <td class="rowact">${canWrite() ? `<button class="btn btn--subtle btn--sm" data-edit="${r.id}">Modifica</button>` : ""}</td>
-      </tr>`).join("")
-      : `<tr><td colspan="${LANGS.length + 2}"><div class="empty">Nessuna chiave corrisponde</div></td></tr>`;
 
-    $$("[data-edit]").forEach(b => b.addEventListener("click", () =>
-      edit(d.results.find(x => String(x.id) === b.dataset.edit))));
+    const byGroup = new Map();
+    for (const r of visible) {
+      const g = trGroupOf(r.tkey);
+      if (!byGroup.has(g.id)) byGroup.set(g.id, { g, list: [] });
+      byGroup.get(g.id).list.push(r);
+    }
+
+    const n = done(to), tot = rows.length;
+    const pct = tot ? Math.round(n / tot * 100) : 0;
+
+    setHeader("Traduzioni",
+      `${langName(to)}: ${n} testi su ${tot} — ogni modifica è online entro un minuto`, []);
+
+    $("#view").innerHTML = `
+      <div class="trbar">
+        <div class="trbar__pick">
+          <label>Traduci in</label>
+          <select id="trTo">${LANGS.filter(l => l !== from)
+            .map(l => `<option value="${l}" ${l === to ? "selected" : ""}>${langName(l)}</option>`).join("")}</select>
+        </div>
+        <div class="trbar__pick">
+          <label>Testo di riferimento</label>
+          <select id="trFrom">${LANGS.filter(l => l !== to)
+            .map(l => `<option value="${l}" ${l === from ? "selected" : ""}>${langName(l)}</option>`).join("")}</select>
+        </div>
+        <div class="trbar__prog">
+          <div class="trbar__track"><div class="trbar__fill" style="width:${pct}%"></div></div>
+          <span>${n} / ${tot}</span>
+        </div>
+      </div>
+
+      <div class="filters">
+        <input type="search" id="trQ" placeholder="Cerca una frase…" value="${esc(q)}">
+        <label class="switch"><input type="checkbox" id="trMiss" ${onlyMissing ? "checked" : ""}>
+          Mostra solo quelli da tradurre</label>
+        <span class="spacer"></span>
+        <span class="muted">${visible.length} testi visibili</span>
+      </div>
+
+      ${visible.length ? [...byGroup.values()].map(({ g, list }) => {
+        const miss = list.filter(r => !val(r, to).trim()).length;
+        return `
+        <details class="trsec" ${miss ? "open" : ""}>
+          <summary>
+            <span class="trsec__n">${esc(g.n)}</span>
+            ${miss ? `<span class="pill pill--pending">${miss} da tradurre</span>`
+                   : `<span class="pill pill--paid">completa</span>`}
+            <span class="trsec__c">${list.length}</span>
+          </summary>
+          ${g.d ? `<p class="trsec__d">${esc(g.d)}</p>` : ""}
+          <div class="trlist">
+            ${list.map(r => {
+              const src = val(r, from), dst = val(r, to);
+              const long = src.length > 90;
+              return `
+              <div class="trrow ${dst.trim() ? "" : "is-miss"}" data-id="${r.id}">
+                <div class="trrow__src">
+                  <p>${src ? esc(src) : `<span class="muted">— manca anche in ${esc(langName(from))} —</span>`}</p>
+                  <code title="Riferimento tecnico, utile per le segnalazioni">${esc(r.tkey)}</code>
+                </div>
+                <div class="trrow__dst">
+                  ${long
+                    ? `<textarea data-tr="${r.id}" rows="3" ${canWrite() ? "" : "disabled"}
+                         placeholder="Scrivi qui la traduzione">${esc(dst)}</textarea>`
+                    : `<input data-tr="${r.id}" value="${esc(dst)}" ${canWrite() ? "" : "disabled"}
+                         placeholder="Scrivi qui la traduzione">`}
+                  <div class="trrow__act">
+                    ${canWrite() && src ? `<button class="trrow__copy" data-copy="${r.id}"
+                      title="Copia il testo di riferimento, utile per nomi propri e sigle">copia originale</button>` : ""}
+                    <span class="trrow__ok" data-ok="${r.id}"></span>
+                  </div>
+                </div>
+              </div>`;
+            }).join("")}
+          </div>
+        </details>`;
+      }).join("") : `<div class="card"><div class="empty">
+          ${onlyMissing ? "Non manca nessuna traduzione: questa lingua è completa."
+                        : "Nessun testo corrisponde alla ricerca."}</div></div>`}`;
+
+    wire();
   }
 
-  let deb;
-  $("#tq").addEventListener("input", e => { clearTimeout(deb); deb = setTimeout(() => { filter = e.target.value; render(); }, 200); });
-  $("#tMissing").addEventListener("change", e => { onlyMissing = e.target.checked; render(); });
-  render();
+  /* Si salva uscendo dal campo, senza pulsanti: con quasi trecento testi,
+     aprire e chiudere una finestra per ognuno sarebbe insostenibile. */
+  async function save(id, value) {
+    const r = rows.find(x => String(x.id) === String(id));
+    if (!r) return;
+    const before = val(r, to);
+    if (before === value) return;
 
-  function edit(r) {
-    modal({
-      title: r.tkey,
-      wide: true,
-      body: `<p class="hint" style="margin:0 0 16px;color:var(--ink-45)">
-               Questo testo sostituisce quello di <code>i18n.js</code> sul sito pubblico.</p>
-             ${langFieldHtml("tv", r.value_json, { multiline: true })}`,
-      actions: [
-        { label: "Annulla", onClick: closeModal },
-        { label: "Salva", cls: "btn--primary", onClick: async () => {
-            try {
-              const value_json = readLangField("tv");
-              await apiJson(`/admin/translations/${r.id}`, "PATCH", { value_json });
-              r.value_json = value_json;
-              closeModal(); toast("Traduzione salvata"); render();
-            } catch (e) { showError(e); }
-          } }
-      ]
-    });
-    bindLangTabs();
+    const next = { ...r.value_json, [to]: value };
+    const ok = $(`[data-ok="${id}"]`);
+    try {
+      await apiJson(`/admin/translations/${id}`, "PATCH", { value_json: next });
+      r.value_json = next;
+      $(`.trrow[data-id="${id}"]`)?.classList.toggle("is-miss", !value.trim());
+      if (ok) { ok.textContent = "salvato"; ok.classList.add("show");
+                setTimeout(() => ok.classList.remove("show"), 1400); }
+      refreshProgress();
+    } catch (e) {
+      showError(e, { noFocus: true });
+      const el = $(`[data-tr="${id}"]`);
+      if (el) { el.value = before; el.classList.add("err"); }
+    }
   }
+
+  function refreshProgress() {
+    const n = done(to), tot = rows.length;
+    const fill = $(".trbar__fill"), lab = $(".trbar__prog span");
+    if (fill) fill.style.width = (tot ? Math.round(n / tot * 100) : 0) + "%";
+    if (lab) lab.textContent = `${n} / ${tot}`;
+    $("#viewSub").textContent =
+      `${langName(to)}: ${n} testi su ${tot} — ogni modifica è online entro un minuto`;
+  }
+
+  function wire() {
+    $("#trTo").addEventListener("change", e => { to = e.target.value; draw(); });
+    $("#trFrom").addEventListener("change", e => { from = e.target.value; draw(); });
+    $("#trMiss").addEventListener("change", e => { onlyMissing = e.target.checked; draw(); });
+
+    let deb;
+    $("#trQ").addEventListener("input", e => {
+      clearTimeout(deb);
+      const v = e.target.value;
+      deb = setTimeout(() => { q = v; draw(); $("#trQ").focus(); }, 300);
+    });
+
+    $$("[data-tr]").forEach(el => {
+      el.addEventListener("blur", () => save(el.dataset.tr, el.value.trim()));
+      el.addEventListener("input", () => el.classList.remove("err"));
+      // Invio salva e passa al campo successivo, senza staccare le mani
+      el.addEventListener("keydown", ev => {
+        if (ev.key === "Enter" && el.tagName === "INPUT") {
+          ev.preventDefault();
+          const all = $$("[data-tr]");
+          const i = all.indexOf(el);
+          el.blur();
+          all[i + 1]?.focus();
+        }
+      });
+    });
+
+    $$("[data-copy]").forEach(b => b.addEventListener("click", () => {
+      const r = rows.find(x => String(x.id) === b.dataset.copy);
+      const el = $(`[data-tr="${b.dataset.copy}"]`);
+      if (r && el) { el.value = val(r, from); el.focus(); save(b.dataset.copy, el.value); }
+    }));
+  }
+
+  draw();
 };
 
 /* ==================================================== TARIFFE ED EXTRA */
