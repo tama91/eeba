@@ -26,6 +26,18 @@ INSERT INTO settings (skey, svalue) VALUES ('payments_methods', 'card,bancontact
 INSERT INTO settings (skey, svalue) VALUES ('payments_currency', 'EUR');
 INSERT INTO settings (skey, svalue) VALUES ('invoice_note', '');
 INSERT INTO settings (skey, svalue) VALUES ('meals_enabled', '1');
+INSERT INTO settings (skey, svalue) VALUES ('abstracts_url', '');
+
+DELETE FROM sections;
+INSERT INTO sections (code, sort, published) VALUES ('about', 0, 1);
+INSERT INTO sections (code, sort, published) VALUES ('focus', 1, 1);
+INSERT INTO sections (code, sort, published) VALUES ('programme', 2, 1);
+INSERT INTO sections (code, sort, published) VALUES ('speakers', 3, 1);
+INSERT INTO sections (code, sort, published) VALUES ('venue', 4, 1);
+INSERT INTO sections (code, sort, published) VALUES ('register', 5, 1);
+INSERT INTO sections (code, sort, published) VALUES ('abstracts', 6, 1);
+INSERT INTO sections (code, sort, published) VALUES ('sponsors', 7, 1);
+INSERT INTO sections (code, sort, published) VALUES ('faq', 8, 1);
 
 DELETE FROM tiers;
 INSERT INTO tiers (code, early_price, late_price, name_json, desc_json, sort, active) VALUES ('mem', 52000, 62000, '{"en":"EEBA Member","it":"Socio EEBA","nl":"EEBA-lid","fr":"Membre EEBA"}', '{"en":"Individual or institutional member in good standing","it":"Socio individuale o istituzionale in regola","nl":"Individueel of institutioneel lid in goede standing","fr":"Membre individuel ou institutionnel à jour de cotisation"}', 0, 1);

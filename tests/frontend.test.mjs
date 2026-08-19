@@ -227,6 +227,43 @@ for (const [file, companions] of [
         orphan.length === 0, orphan.map(a => "data-" + a).join(", "));
 }
 
+/* --------------------------------------------------- sezioni della home */
+/* Ogni riga della tabella `sections` deve corrispondere a un <section id="…">
+   che esiste davvero nella home, e viceversa. Se i due elenchi divergono, il
+   backoffice mostra una sezione che il sito non ha (o tiene nascosta una
+   sezione che nessuno può più far riapparire) — e nessuno se ne accorge
+   finché non è online. */
+group("Sezioni della home");
+{
+  const html = read("public/index.html");
+  const main = html.slice(html.indexOf("<main"), html.indexOf("</main>"));
+  const inPage = [...main.matchAll(/<section\b[^>]*\bid="([a-z0-9_-]+)"/g)].map(m => m[1]);
+
+  const grab = (file, re) => [...new Set([...read(file).matchAll(re)].map(m => m[1]))];
+  const inSeed  = grab("schema/seed.sql", /INSERT INTO sections \(code, sort, published\) VALUES \('([a-z0-9_-]+)'/g);
+  const inMigr  = grab("schema/migrations/004-sections.sql", /^\s*\('([a-z0-9_-]+)',\s*\d+,\s*1\)/gm);
+  const inAdmin = grab("public/admin/admin.js",
+    /^  ([a-z0-9_]+):\s*\{ n: "[^"]+",\s+d: "/gm);
+
+  check("il seed elenca le sezioni della pagina",
+    inSeed.every(c => inPage.includes(c)), inSeed.filter(c => !inPage.includes(c)).join(", "));
+  check("la migrazione 004 elenca le stesse del seed",
+    inSeed.every(c => inMigr.includes(c)) && inMigr.length === inSeed.length,
+    `seed ${inSeed.length}, migrazione ${inMigr.length}`);
+  check("il backoffice ha un nome in italiano per ognuna",
+    inSeed.every(c => inAdmin.includes(c)), inSeed.filter(c => !inAdmin.includes(c)).join(", "));
+
+  /* Le sezioni si spostano fra le loro posizioni: quelle che non sono in
+     elenco (hero, statistiche, fascia finale) devono restare dove sono. */
+  const app = read("public/app.js");
+  check("il sito applica ordine e visibilità", /function applySections\s*\(/.test(app));
+  check("e li chiede al server", /DATA\.sections/.test(app));
+  check("il pulsante abstract ha una destinazione configurabile",
+    /function applyAbstractsLink\s*\(/.test(app) && /id="absCta"/.test(html));
+  check("e non resta un href=\"#\" nella sezione abstract",
+    !/<a href="#" class="btn/.test(html));
+}
+
 /* ------------------------------------------------------- pagine legali */
 group("Pagine legali");
 {

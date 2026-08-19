@@ -14,14 +14,15 @@
     "db:seed:local": "wrangler d1 execute eeba-2027 --file=schema/seed.sql --local",
     "test:api": "node tests/api.test.mjs",
     "test:theme": "node tests/theme.test.mjs",
-    "db:migrate": "wrangler d1 execute eeba-2027 --remote --file=schema/migrations/001-flexible-days-theme.sql && wrangler d1 execute eeba-2027 --remote --file=schema/migrations/002-payments.sql && wrangler d1 execute eeba-2027 --remote --file=schema/migrations/003-meals.sql",
-    "db:migrate:local": "wrangler d1 execute eeba-2027 --local --file=schema/migrations/001-flexible-days-theme.sql && wrangler d1 execute eeba-2027 --local --file=schema/migrations/002-payments.sql && wrangler d1 execute eeba-2027 --local --file=schema/migrations/003-meals.sql",
+    "db:migrate": "wrangler d1 execute eeba-2027 --remote --file=schema/migrations/001-flexible-days-theme.sql && wrangler d1 execute eeba-2027 --remote --file=schema/migrations/002-payments.sql && wrangler d1 execute eeba-2027 --remote --file=schema/migrations/003-meals.sql && wrangler d1 execute eeba-2027 --remote --file=schema/migrations/004-sections.sql",
+    "db:migrate:local": "wrangler d1 execute eeba-2027 --local --file=schema/migrations/001-flexible-days-theme.sql && wrangler d1 execute eeba-2027 --local --file=schema/migrations/002-payments.sql && wrangler d1 execute eeba-2027 --local --file=schema/migrations/003-meals.sql && wrangler d1 execute eeba-2027 --local --file=schema/migrations/004-sections.sql",
     "test:frontend": "node tests/frontend.test.mjs",
     "db:topup": "wrangler d1 execute eeba-2027 --remote --file=schema/seed-topup.sql",
     "db:topup:local": "wrangler d1 execute eeba-2027 --local --file=schema/seed-topup.sql",
     "db:migrate:001": "wrangler d1 execute eeba-2027 --remote --file=schema/migrations/001-flexible-days-theme.sql",
     "db:migrate:002": "wrangler d1 execute eeba-2027 --remote --file=schema/migrations/002-payments.sql",
-    "db:migrate:003": "wrangler d1 execute eeba-2027 --remote --file=schema/migrations/003-meals.sql"
+    "db:migrate:003": "wrangler d1 execute eeba-2027 --remote --file=schema/migrations/003-meals.sql",
+    "db:migrate:004": "wrangler d1 execute eeba-2027 --remote --file=schema/migrations/004-sections.sql"
   },
   "devDependencies": {
     "wrangler": "^4"

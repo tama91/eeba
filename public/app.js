@@ -66,6 +66,7 @@ async function hydrate() {
     DATA.tiers     = (d.tiers && d.tiers.length) ? d.tiers : null;
     DATA.addons    = (d.addons && d.addons.length) ? d.addons : null;
     DATA.meals     = Array.isArray(d.meals) ? d.meals : null;
+    DATA.sections  = Array.isArray(d.sections) ? d.sections : [];
     DATA.live = true;
 
     if (DATA.settings.event_start) {
@@ -701,6 +702,60 @@ function initHeader() {
   document.addEventListener("keydown", e => { if (e.key === "Escape") { langBox.classList.remove("is-open"); document.body.classList.remove("menu-open"); } });
 }
 
+/* -------------------------------------------------------------- SEZIONI */
+/* L'ordine e la visibilità dei blocchi della home stanno nel database. Qui si
+   spostano quelli che ci sono: le sezioni restano scritte in index.html, il
+   backoffice decide solo in che ordine appaiono e se appaiono.
+
+   Se il database non risponde, o se una sezione è nel database ma non nella
+   pagina (o viceversa), non succede niente: resta l'ordine del markup. */
+function applySections() {
+  const rows = Array.isArray(DATA.sections) ? DATA.sections : [];
+  if (!rows.length) return;
+
+  const known = new Map();
+  for (const r of rows) {
+    const el = document.getElementById(r.code);
+    if (el && el.parentElement === $("main")) known.set(r.code, { r, el });
+  }
+  if (!known.size) return;
+
+  /* Si riordina soltanto fra le posizioni già occupate da queste sezioni: hero,
+     ticker, statistiche e fascia finale non sono in elenco e non si muovono. */
+  const slots = [...$("main").children]
+    .filter(el => known.has(el.id))
+    .map(el => { const m = document.createElement("template"); el.before(m); return m; });
+
+  [...known.values()]
+    .sort((a, b) => (Number(a.r.sort) || 0) - (Number(b.r.sort) || 0))
+    .forEach((w, i) => slots[i] && slots[i].replaceWith(w.el));
+
+  slots.forEach(m => m.remove());   // eventuali segnaposto avanzati
+
+  /* Una sezione spenta sparisce anche dal menu e dal piè di pagina: un link
+     che porta a un'ancora inesistente è peggio di un link mancante. */
+  for (const [code, { r, el }] of known) {
+    const on = String(r.published) !== "0";
+    el.hidden = !on;
+    $$(`a[href="#${code}"]`).forEach(a => { (a.closest("li") || a).hidden = !on; });
+  }
+}
+
+/* Il pulsante «Invia un abstract» va dove dice l'impostazione: un sistema
+   esterno di raccolta, oppure l'indirizzo della segreteria. Senza indirizzo
+   configurato il pulsante non si mostra, invece di non portare da nessuna
+   parte come farebbe un href="#". */
+function applyAbstractsLink() {
+  const a = $("#absCta");
+  if (!a) return;
+  const url = String(DATA.settings.abstracts_url || "").trim();
+  if (!url) { a.hidden = true; return; }
+  a.hidden = false;
+  a.href = url;
+  if (/^https:/i.test(url)) { a.target = "_blank"; a.rel = "noopener noreferrer"; }
+  else { a.removeAttribute("target"); a.removeAttribute("rel"); }
+}
+
 /* ------------------------------------------------------------------ BOOT */
 async function init() {
   buildLangMenu();
@@ -723,6 +778,8 @@ async function init() {
 
   await hydrate();
   applyTheme(DATA.settings);
+  applySections();
+  applyAbstractsLink();
   renderLogo();
   buildLangMenu();          // le lingue attive si conoscono solo dopo l'idratazione
   setLang(detectLang());

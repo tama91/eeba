@@ -643,6 +643,69 @@ group("Menu e allergie");
   await call("/admin/settings", { method:"PATCH", body:{ meals_enabled:"1" } });
 }
 
+group("Sezioni della home");
+{
+  let r = await call("/admin/sections");
+  check("le nove sezioni ci sono tutte", r.data.results.length === 9, r.data.results.length);
+  check("arrivano nell'ordine della pagina",
+    r.data.results.map(x => x.code).join(",") === "about,focus,programme,speakers,venue,register,abstracts,sponsors,faq",
+    r.data.results.map(x => x.code).join(","));
+
+  const byCode = Object.fromEntries(r.data.results.map(x => [x.code, x]));
+
+  /* spostare gli sponsor sopra le FAQ = scambiare i due valori di sort */
+  r = await call(`/admin/sections/${byCode.sponsors.id}`, { method: "PATCH", body: { sort: 8 } });
+  check("una sezione si può spostare", r.status === 200, JSON.stringify(r.data));
+  r = await call(`/admin/sections/${byCode.faq.id}`, { method: "PATCH", body: { sort: 7 } });
+  check("e quella che scala prende il posto", r.status === 200);
+
+  r = await call("/public/content", { useCookie: false });
+  const pub = r.data.sections.map(x => x.code);
+  check("il sito riceve il nuovo ordine",
+    pub.indexOf("faq") < pub.indexOf("sponsors"), pub.join(","));
+
+  /* nasconderne una */
+  r = await call(`/admin/sections/${byCode.abstracts.id}`, { method: "PATCH", body: { published: 0 } });
+  check("una sezione si può nascondere", r.status === 200);
+  r = await call("/public/content", { useCookie: false });
+  check("il sito sa che è nascosta",
+    r.data.sections.find(x => x.code === "abstracts").published === 0);
+  check("ma continua a riceverla, per non perderne la posizione",
+    r.data.sections.length === 9, r.data.sections.length);
+
+  /* l'elenco è chiuso: nove sezioni sono nove blocchi che esistono nel markup */
+  r = await call("/admin/sections", { method: "POST", body: { sort: 99, published: 1 } });
+  check("non si può inventare una sezione nuova", r.status === 403, r.status);
+  check("con un codice riconoscibile", r.data.code === "LIST_FIXED", r.data.code);
+  r = await call(`/admin/sections/${byCode.faq.id}`, { method: "DELETE" });
+  check("né eliminarne una esistente", r.status === 403, r.status);
+
+  /* si rimette a posto per i gruppi successivi */
+  await call(`/admin/sections/${byCode.sponsors.id}`, { method: "PATCH", body: { sort: 7 } });
+  await call(`/admin/sections/${byCode.faq.id}`,      { method: "PATCH", body: { sort: 8 } });
+  await call(`/admin/sections/${byCode.abstracts.id}`,{ method: "PATCH", body: { published: 1 } });
+}
+
+group("Dove si inviano gli abstract");
+{
+  const cases = [
+    ["",                                 200, "vuoto = pulsante nascosto"],
+    ["https://abstracts.eeba.eu/2027",   200, "indirizzo di un sistema esterno"],
+    ["mailto:abstracts@eeba.eu",         200, "indirizzo email della segreteria"],
+    ["http://abstracts.eeba.eu",         400, "senza cifratura rifiutato"],
+    ["abstracts@eeba.eu",                400, "email senza mailto: rifiutata"],
+    ["javascript:alert(1)",              400, "indirizzo eseguibile rifiutato"],
+    ["https://x.eu/\" onclick=\"evil()", 400, "virgolette rifiutate"]
+  ];
+  for (const [v, status, name] of cases) {
+    const r = await call("/admin/settings", { method: "PATCH", body: { abstracts_url: v } });
+    check(name, r.status === status, `${v} → ${r.status} ${JSON.stringify(r.data)}`);
+  }
+  await call("/admin/settings", { method: "PATCH", body: { abstracts_url: "mailto:abstracts@eeba.eu" } });
+  const r = await call("/public/content", { useCookie: false });
+  check("il sito riceve la destinazione", r.data.settings.abstracts_url === "mailto:abstracts@eeba.eu");
+}
+
 group("Messaggi di errore comprensibili");
 {
   /* Il caso che ha fatto nascere questo gruppo: creando due volte la stessa

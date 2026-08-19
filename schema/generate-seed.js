@@ -52,11 +52,20 @@ const settings = {
   payments_methods: "card,bancontact,ideal,paypal,revolut_pay,sepa,inv",
   payments_currency:"EUR",
   invoice_note:     "",
-  meals_enabled:    "1"
+  meals_enabled:    "1",
+  abstracts_url:    ""
 };
 for (const [k, v] of Object.entries(settings)) {
   W(`INSERT INTO settings (skey, svalue) VALUES (${q(k)}, ${q(v)});`);
 }
+
+/* ----------------------------------------------------------------- SEZIONI */
+/* L'ordine di partenza è quello scritto in index.html. */
+const SECTIONS = ["about", "focus", "programme", "speakers", "venue",
+                  "register", "abstracts", "sponsors", "faq"];
+W("\nDELETE FROM sections;");
+SECTIONS.forEach((c, i) =>
+  W(`INSERT INTO sections (code, sort, published) VALUES (${q(c)}, ${i}, 1);`));
 
 /* ------------------------------------------------------------------ TARIFFE */
 W("\nDELETE FROM tiers;");
@@ -172,6 +181,10 @@ U("-- ==========================================================================
 U("-- Impostazioni introdotte dopo il primo avvio");
 for (const [k, v] of Object.entries(settings))
   U(`INSERT OR IGNORE INTO settings (skey, svalue) VALUES (${q(k)}, ${q(v)});`);
+
+U("\n-- Sezioni della home introdotte con la migrazione 004");
+SECTIONS.forEach((c, i) =>
+  U(`INSERT OR IGNORE INTO sections (code, sort, published) VALUES (${q(c)}, ${i}, 1);`));
 
 U("\n-- Opzioni di menu introdotte con la migrazione 003");
 MEALS.forEach(([code, name], i) => {

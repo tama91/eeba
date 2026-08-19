@@ -273,6 +273,13 @@ function sanitizeSetting(key, value) {
     case "session_tags":
       if (!/^[a-z0-9_]+(,[a-z0-9_]+)*$/.test(v.trim())) return new Error("codici separati da virgola, solo lettere minuscole");
       return v.trim();
+    /* Dove porta «Invia un abstract». Un sistema esterno di raccolta o, se non
+       ce n'è uno, l'indirizzo della segreteria. Vuoto = pulsante nascosto. */
+    case "abstracts_url":
+      if (!v.trim()) return "";
+      if (/^https:\/\/[^\s<>"]+$/i.test(v.trim())) return v.trim();
+      if (/^mailto:[^\s<>"@]+@[^\s<>"@]+\.[a-z]{2,}/i.test(v.trim())) return v.trim();
+      return new Error("un indirizzo che inizia con https:// oppure con mailto:");
     case "early_until":
     case "stat_target_date":
       if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return new Error("formato AAAA-MM-GG");
@@ -327,6 +334,15 @@ const ENTITIES = {
   meals: {
     table: "meals", order: "sort, id",
     fields: ["code", "name_json", "sort", "active"]
+  },
+  /* Le sezioni si riordinano e si spengono, non si creano né si eliminano:
+     ognuna corrisponde a un blocco che esiste nel markup della home. Una riga
+     con un codice inventato non disegnerebbe niente, quindi POST e DELETE
+     restano chiusi (vedi il controllo nel router). */
+  sections: {
+    table: "sections", order: "sort, id",
+    fields: ["sort", "published"],
+    fixed: true
   }
 };
 
@@ -534,7 +550,7 @@ export async function onRequest(context) {
 
       if (seg[1] === "content" && method === "GET") {
         const db = env.DB;
-        const [settings, translations, slots, speakers, sponsors, tiers, addons, meals] = await Promise.all([
+        const [settings, translations, slots, speakers, sponsors, tiers, addons, meals, sections] = await Promise.all([
           db.prepare(`SELECT skey, svalue FROM settings`).all(),
           db.prepare(`SELECT tkey, value_json FROM translations`).all(),
           db.prepare(`SELECT day_no, time, tag, title_json, desc_json FROM programme_slots
@@ -548,7 +564,11 @@ export async function onRequest(context) {
           db.prepare(`SELECT code, price, name_json, desc_json FROM addons
                        WHERE active = 1 ORDER BY sort, id`).all(),
           db.prepare(`SELECT code, name_json FROM meals
-                       WHERE active = 1 ORDER BY sort, id`).all()
+                       WHERE active = 1 ORDER BY sort, id`).all(),
+          /* La tabella arriva con la migrazione 004. Se non c'è ancora, il sito
+             deve continuare a funzionare con l'ordine scritto nel markup. */
+          db.prepare(`SELECT code, sort, published FROM sections ORDER BY sort, id`).all()
+            .catch(() => ({ results: [] }))
         ]);
 
         /* Le giornate si ricavano dalle impostazioni, non da un numero fisso:
@@ -578,7 +598,8 @@ export async function onRequest(context) {
           sponsors: sponsors.results,
           tiers: tiers.results.map(hydrateJson),
           addons: addons.results.map(hydrateJson),
-          meals: settingsMap.meals_enabled === "0" ? [] : meals.results.map(hydrateJson)
+          meals: settingsMap.meals_enabled === "0" ? [] : meals.results.map(hydrateJson),
+          sections: sections.results
         }, 200, { "cache-control": "public, max-age=60, s-maxage=60" });
       }
 
@@ -938,6 +959,11 @@ export async function onRequest(context) {
         const cfg = ENTITIES[seg[1]];
         const entity = seg[1];
         if (method === "GET")    return json({ results: await entityList(env, cfg) });
+
+        /* Elenco chiuso: le righe esistono perché esiste il blocco nel markup. */
+        if (cfg.fixed && (method === "POST" || method === "DELETE"))
+          return err(403, "LIST_FIXED", "Questo elenco non si può allungare né accorciare", { entity });
+
         if (method === "POST") {
           try {
             const id = await entityCreate(env, cfg, body);

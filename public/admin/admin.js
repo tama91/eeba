@@ -693,6 +693,127 @@ function openReg(r, tierName, statusLabel, reload) {
   });
 }
 
+/* ================================================ SEZIONI DELLA HOME */
+/* Le nove sezioni esistono nel markup della home. Da qui si decide in che
+   ordine appaiono e se appaiono: è la richiesta che arriva quasi sempre da
+   un'edizione all'altra ("quest'anno niente call for abstract", "gli sponsor
+   li vogliamo più in alto"), e non ha senso che passi da una modifica al
+   codice. Inventare una sezione nuova, invece, resta lavoro da sviluppatore. */
+const SECTION_INFO = {
+  about:     { n: "Il congresso",        d: "L'invito e la presentazione dell'edizione." },
+  focus:     { n: "Il tema dell'anno",   d: "Il filo conduttore scientifico, con i punti che verranno trattati." },
+  programme: { n: "Programma",           d: "Le sessioni giornata per giornata. Si compila da «Programma»." },
+  speakers:  { n: "Relatori",            d: "Le schede dei relatori invitati. Si compilano da «Relatori»." },
+  venue:     { n: "Sede e come arrivare", d: "Indirizzo, mappa e indicazioni di viaggio." },
+  register:  { n: "Iscrizione",          d: "Il modulo vero e proprio: tariffe, extra, menu e pagamento." },
+  abstracts: { n: "Abstract",            d: "La call for abstract, con le scadenze e il pulsante per inviarli." },
+  sponsors:  { n: "Sponsor",             d: "I loghi divisi per livello. Si compilano da «Sponsor»." },
+  faq:       { n: "Domande frequenti",   d: "Le risposte alle domande che arrivano più spesso in segreteria." }
+};
+
+VIEWS.sections = async function () {
+  let rows;
+  try {
+    rows = (await api("/admin/sections")).results;
+  } catch (e) {
+    // La tabella arriva con la migrazione 004: senza, la pagina non esiste ancora.
+    $("#view").innerHTML = "";
+    setHeader("Sezioni della home", "Ordine e visibilità dei blocchi del sito", []);
+    showError(e);
+    return;
+  }
+  rows.sort((a, b) => a.sort - b.sort);
+
+  const on = r => String(r.published) !== "0";
+
+  function draw() {
+    const off = rows.filter(r => !on(r)).length;
+    setHeader("Sezioni della home",
+      off ? `${rows.length - off} sezioni visibili, ${off} nascoste`
+          : `Tutte e ${rows.length} le sezioni sono visibili`, []);
+
+    $("#view").innerHTML = `
+      <div class="alert alert--info">
+        Qui decidi <b>in che ordine</b> compaiono i blocchi della home e <b>quali mostrare</b>.
+        I contenuti di ciascuno si modificano dalle rispettive pagine.
+        Una sezione nascosta sparisce anche dal menu in alto e dal piè di pagina.
+      </div>
+
+      <div class="card seclist">
+        ${rows.map((r, i) => {
+          const info = SECTION_INFO[r.code] || { n: r.code, d: "" };
+          const vis = on(r);
+          return `
+          <div class="secrow ${vis ? "" : "is-off"}" data-id="${r.id}">
+            <div class="secrow__pos">${i + 1}</div>
+            <div class="secrow__txt">
+              <b>${esc(info.n)}</b>
+              <p>${esc(info.d)}</p>
+              ${r.code === "register" && !vis
+                ? `<p class="secrow__warn">Con questa sezione nascosta dalla home nessuno può iscriversi dal sito.</p>` : ""}
+            </div>
+            <div class="secrow__vis">
+              <label class="switch">
+                <input type="checkbox" data-vis="${r.id}" ${vis ? "checked" : ""} ${canWrite() ? "" : "disabled"}>
+                <span>${vis ? "Visibile" : "Nascosta"}</span>
+              </label>
+            </div>
+            <div class="secrow__mv">
+              <button class="iconbtn" data-up="${r.id}"   ${i === 0 || !canWrite() ? "disabled" : ""} title="Sposta più in alto" aria-label="Sposta ${esc(info.n)} più in alto">↑</button>
+              <button class="iconbtn" data-down="${r.id}" ${i === rows.length - 1 || !canWrite() ? "disabled" : ""} title="Sposta più in basso" aria-label="Sposta ${esc(info.n)} più in basso">↓</button>
+            </div>
+          </div>`;
+        }).join("")}
+      </div>
+
+      <p class="hint" style="margin-top:14px">
+        Le modifiche si salvano da sole e sono online entro un minuto.
+        <a href="/" target="_blank" rel="noopener">Apri il sito in una scheda nuova</a> per vedere il risultato.
+      </p>`;
+
+    wire();
+  }
+
+  /* Si salva solo ciò che è cambiato davvero: dopo uno spostamento sono due
+     righe, non nove. */
+  async function persist(changed) {
+    try {
+      await Promise.all(changed.map(r =>
+        apiJson(`/admin/sections/${r.id}`, "PATCH", { sort: r.sort, published: on(r) ? 1 : 0 })));
+      toast("Ordine aggiornato");
+    } catch (e) {
+      showError(e, { noFocus: true });
+    }
+  }
+
+  function move(id, delta) {
+    const i = rows.findIndex(r => String(r.id) === String(id));
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= rows.length) return;
+    [rows[i], rows[j]] = [rows[j], rows[i]];
+    rows.forEach((r, k) => { r.sort = k; });
+    draw();
+    persist([rows[i], rows[j]]);
+    // il pulsante appena premuto si è spostato con la riga: gli si torna sopra
+    $(`[data-${delta < 0 ? "up" : "down"}="${id}"]`)?.focus();
+  }
+
+  function wire() {
+    $$("[data-up]").forEach(b   => b.addEventListener("click", () => move(b.dataset.up, -1)));
+    $$("[data-down]").forEach(b => b.addEventListener("click", () => move(b.dataset.down, +1)));
+    $$("[data-vis]").forEach(c  => c.addEventListener("change", () => {
+      const r = rows.find(x => String(x.id) === c.dataset.vis);
+      if (!r) return;
+      r.published = c.checked ? 1 : 0;
+      draw();
+      persist([r]);
+      $(`[data-vis="${r.id}"]`)?.focus();
+    }));
+  }
+
+  draw();
+};
+
 /* ========================================================= PROGRAMMA */
 VIEWS.programme = async function () {
   const d = await api("/admin/programme");
@@ -944,8 +1065,15 @@ const TR_GROUPS = [
 const trGroupOf = key => TR_GROUPS.find(g => g.m.test(key)) || TR_GROUPS[TR_GROUPS.length - 1];
 
 const LANG_NAME = { en:"Inglese", it:"Italiano", nl:"Olandese", fr:"Francese",
-                    de:"Tedesco", es:"Spagnolo", pt:"Portoghese" };
+                    de:"Tedesco", es:"Spagnolo", pt:"Portoghese", da:"Danese",
+                    sv:"Svedese", no:"Norvegese", fi:"Finlandese", pl:"Polacco",
+                    cs:"Ceco", el:"Greco", hu:"Ungherese", ro:"Rumeno",
+                    tr:"Turco", sl:"Sloveno", hr:"Croato", sk:"Slovacco" };
 const langName = c => LANG_NAME[c] || c.toUpperCase();
+
+const sectionBadge = miss => miss
+  ? `<span class="pill pill--pending">${miss} da tradurre</span>`
+  : `<span class="pill pill--paid">completa</span>`;
 
 VIEWS.translations = async function () {
   const d = await api("/admin/translations");
@@ -1013,11 +1141,10 @@ VIEWS.translations = async function () {
       ${visible.length ? [...byGroup.values()].map(({ g, list }) => {
         const miss = list.filter(r => !val(r, to).trim()).length;
         return `
-        <details class="trsec" ${miss ? "open" : ""}>
+        <details class="trsec" data-sec="${esc(g.id)}" ${miss ? "open" : ""}>
           <summary>
             <span class="trsec__n">${esc(g.n)}</span>
-            ${miss ? `<span class="pill pill--pending">${miss} da tradurre</span>`
-                   : `<span class="pill pill--paid">completa</span>`}
+            <span class="trsec__badge">${sectionBadge(miss)}</span>
             <span class="trsec__c">${list.length}</span>
           </summary>
           ${g.d ? `<p class="trsec__d">${esc(g.d)}</p>` : ""}
@@ -1071,6 +1198,7 @@ VIEWS.translations = async function () {
       if (ok) { ok.textContent = "salvato"; ok.classList.add("show");
                 setTimeout(() => ok.classList.remove("show"), 1400); }
       refreshProgress();
+      refreshGroupBadge(id);
     } catch (e) {
       showError(e, { noFocus: true });
       const el = $(`[data-tr="${id}"]`);
@@ -1085,6 +1213,18 @@ VIEWS.translations = async function () {
     if (lab) lab.textContent = `${n} / ${tot}`;
     $("#viewSub").textContent =
       `${langName(to)}: ${n} testi su ${tot} — ogni modifica è online entro un minuto`;
+  }
+
+  /* Il conteggio della sezione si rifà contando le righe ancora vuote che sono
+     lì sotto in quel momento. Ridisegnare tutto sarebbe più semplice ma
+     chiuderebbe le sezioni aperte e farebbe saltare il campo dove si sta
+     scrivendo: non si può ricaricare la pagina addosso a chi la sta usando. */
+  function refreshGroupBadge(id) {
+    const sec = $(`.trrow[data-id="${id}"]`)?.closest(".trsec");
+    if (!sec) return;
+    const miss = sec.querySelectorAll(".trrow.is-miss").length;
+    const badge = sec.querySelector(".trsec__badge");
+    if (badge) badge.innerHTML = sectionBadge(miss);
   }
 
   function wire() {
@@ -1637,33 +1777,236 @@ VIEWS.appearance = async function () {
 };
 
 /* ====================================================== IMPOSTAZIONI */
-const SETTING_LABEL = {
-  event_start: "Inizio evento (ISO)", event_end: "Fine evento (ISO)",
-  early_until: "Early bird fino al (AAAA-MM-GG)", currency: "Valuta",
-  venue_name: "Nome della sede", venue_maps: "Link Google Maps",
-  languages: "Lingue attive (codici separati da virgola)",
-  registration_open: "Iscrizioni aperte (1 = sì, 0 = no)"
+/* Prima questa pagina era l'elenco grezzo della tabella `settings`: una riga
+   per chiave, il nome tecnico come etichetta, tutto in un campo di testo. Chi
+   l'ha scritta sa cosa vuol dire `stat_target_date`; una segreteria no, e
+   soprattutto non ha modo di capire quali valori siano leciti.
+
+   Ora le impostazioni sono raggruppate per argomento, hanno un nome in
+   italiano e una riga che spiega dove finiscono sul sito, e il campo è del
+   tipo giusto: un calendario per le date, un interruttore per il sì/no, un
+   elenco per la valuta. Le chiavi tecniche restano visibili in fondo, in una
+   sezione richiudibile, perché servono quando c'è da segnalare un problema.
+
+   Le impostazioni che hanno già una pagina dedicata (colori, logo, pagamenti)
+   non compaiono qui: si modificano dove si vedono. */
+
+const SETTING_ELSEWHERE = {
+  theme_preset: "Aspetto e logo", theme_accent: "Aspetto e logo",
+  logo_url: "Aspetto e logo",     logo_svg: "Aspetto e logo",
+  payments_mode: "Pagamenti",     payments_methods: "Pagamenti",
+  payments_provider: "Pagamenti", payments_currency: "Pagamenti",
+  invoice_note: "Pagamenti"
+};
+
+const SETTING_GROUPS = [
+  { n: "Quando e dove", d: "Le date e la sede. Da qui dipendono il conto alla rovescia, le giornate del programma e il file da aggiungere al calendario.",
+    keys: ["event_start", "event_end", "event_days", "venue_name", "venue_maps"] },
+  { n: "Iscrizioni", d: "Se il modulo è aperto e fino a quando vale la tariffa ridotta.",
+    keys: ["registration_open", "early_until", "currency", "meals_enabled", "stat_target_date"] },
+  { n: "Lingue e contenuti", d: "Quali lingue offrire ai visitatori e come sono organizzate le sessioni.",
+    keys: ["languages", "session_tags", "abstracts_url"] }
+];
+
+const SETTING_UI = {
+  event_start: { n: "Primo giorno del congresso", t: "date",
+    h: "Da qui parte il conto alla rovescia in cima al sito e si calcolano le date delle singole giornate." },
+  event_end: { n: "Ultimo giorno", t: "date",
+    h: "Usato nel file da aggiungere al calendario che gli iscritti possono scaricare." },
+  event_days: { n: "Quante giornate dura", t: "number", min: 1, max: 14,
+    h: "Le schede del programma e le date di ogni giornata si adeguano da sole. Da 1 a 14." },
+  venue_name: { n: "Nome della sede", t: "text",
+    h: "Compare nella sezione «Sede» e nel promemoria del calendario. Per esempio: University Hall, Leuven." },
+  venue_maps: { n: "Collegamento alla mappa", t: "url", ph: "https://maps.app.goo.gl/…",
+    h: "Il pulsante «Apri in Google Maps». Apri la sede su Google Maps, premi Condividi e incolla qui l'indirizzo." },
+
+  registration_open: { n: "Le iscrizioni sono aperte", t: "bool",
+    h: "Chiudendole, chi prova a iscriversi vede un avviso e il modulo non accetta più invii. Le iscrizioni già arrivate restano." },
+  early_until: { n: "La tariffa ridotta vale fino al", t: "date",
+    h: "Fino a questa data compresa si paga il prezzo early bird; dal giorno dopo, quello pieno. Il conto lo fa il server." },
+  currency: { n: "Valuta dei prezzi", t: "select",
+    opts: [["EUR", "Euro (€)"], ["CHF", "Franco svizzero"], ["GBP", "Sterlina"], ["USD", "Dollaro USA"]],
+    h: "Cambia solo come sono scritti i prezzi. Non converte le cifre già inserite in Tariffe." },
+  meals_enabled: { n: "Chiedi la scelta del menu", t: "bool",
+    h: "Se attivo, all'iscrizione compare la scelta del pasto e il riepilogo per il catering. Le opzioni si definiscono in «Tariffe, extra e menu»." },
+  stat_target_date: { n: "Data per il contatore in cima", t: "date",
+    h: "Serve solo al numero di mesi mostrato fra le statistiche di apertura. Non ha effetto sulle iscrizioni." },
+
+  languages: { n: "Lingue del sito", t: "langs",
+    h: "Il visitatore sceglie fra queste dal menu in alto a destra. Una lingua senza traduzioni compilate mostra i testi inglesi." },
+  session_tags: { n: "Tipi di sessione", t: "tags",
+    h: "Le etichette che si possono assegnare a una sessione del programma (plenaria, laboratorio, simposio…). Il nome visibile si scrive in «Traduzioni»." },
+  abstracts_url: { n: "Dove si inviano gli abstract", t: "abstracts",
+    h: "" }
 };
 
 VIEWS.settings = async function () {
   const d = await api("/admin/settings");
-  setHeader("Impostazioni", "Parametri generali dell'evento", []);
+  const cur = Object.fromEntries(d.results.map(s => [s.skey, s.svalue]));
+  const dirty = new Map();               // solo ciò che è stato toccato davvero
 
+  const known = new Set(SETTING_GROUPS.flatMap(g => g.keys));
+  const other = d.results.filter(s => !known.has(s.skey) && !SETTING_ELSEWHERE[s.skey]);
+
+  setHeader("Impostazioni", "Come è configurato l'evento", []);
+
+  const ro = canWrite() ? "" : "disabled";
+
+  /* --------------------------------------------------------- un campo --- */
+  function field(key) {
+    const ui = SETTING_UI[key] || { n: key, t: "text", h: "" };
+    const v = cur[key] ?? "";
+    const id = "set_" + key;
+    let input;
+
+    switch (ui.t) {
+      case "bool":
+        return `
+          <div class="setrow" data-key="${esc(key)}">
+            <div class="setrow__lab"><label for="${id}">${esc(ui.n)}</label>
+              <p class="setrow__h">${esc(ui.h)}</p></div>
+            <div class="setrow__in setrow__in--bool">
+              <label class="switch"><input type="checkbox" id="${id}" data-skey="${esc(key)}" data-kind="bool"
+                ${v === "1" ? "checked" : ""} ${ro}><span data-boollab>${v === "1" ? "Sì" : "No"}</span></label>
+            </div>
+          </div>`;
+
+      case "select":
+        input = `<select id="${id}" data-skey="${esc(key)}" ${ro}>${
+          ui.opts.map(([k, n]) => `<option value="${esc(k)}" ${k === v ? "selected" : ""}>${esc(n)}</option>`).join("")
+        }</select>`;
+        break;
+
+      case "number":
+        input = `<input type="number" id="${id}" data-skey="${esc(key)}" value="${esc(v)}"
+                  min="${ui.min}" max="${ui.max}" ${ro}>`;
+        break;
+
+      case "date":
+        input = `<input type="date" id="${id}" data-skey="${esc(key)}" value="${esc(v)}" ${ro}>`;
+        break;
+
+      case "langs":   return chipField(key, ui, v, "lang");
+      case "tags":    return chipField(key, ui, v, "tag");
+      case "abstracts": return abstractsField(key, ui, v);
+
+      default:
+        input = `<input type="${ui.t === "url" ? "url" : "text"}" id="${id}" data-skey="${esc(key)}"
+                  value="${esc(v)}" placeholder="${esc(ui.ph || "")}" ${ro}>`;
+    }
+
+    return `
+      <div class="setrow" data-key="${esc(key)}">
+        <div class="setrow__lab"><label for="${id}">${esc(ui.n)}</label>
+          <p class="setrow__h">${esc(ui.h)}</p></div>
+        <div class="setrow__in">${input}</div>
+      </div>`;
+  }
+
+  /* Lingue e tipi di sessione erano campi di testo con dentro "en,it,nl,fr".
+     Funzionano, se sai che la virgola conta e che gli spazi no. Sotto forma di
+     pastiglie il formato non si può più sbagliare. */
+  function chipField(key, ui, v, kind) {
+    const list = String(v).split(",").map(x => x.trim()).filter(Boolean);
+    return `
+      <div class="setrow setrow--wide" data-key="${esc(key)}">
+        <div class="setrow__lab"><label>${esc(ui.n)}</label>
+          <p class="setrow__h">${esc(ui.h)}</p></div>
+        <div class="setrow__in">
+          <div class="chips" data-chips="${esc(key)}" data-kind="${kind}">
+            ${list.map(c => chip(c, kind, list.length > 1)).join("")}
+          </div>
+          ${canWrite() ? `
+          <div class="chipadd">
+            <input data-chipin="${esc(key)}" placeholder="${kind === "lang" ? "codice di due lettere, es. de" : "codice, es. poster"}" maxlength="24">
+            <button class="btn btn--ghost btn--sm" data-chipbtn="${esc(key)}">Aggiungi</button>
+          </div>` : ""}
+          <input type="hidden" data-skey="${esc(key)}" value="${esc(list.join(","))}">
+        </div>
+      </div>`;
+  }
+
+  const chip = (c, kind, removable) => `
+    <span class="chip" data-chip="${esc(c)}">
+      ${esc(kind === "lang" ? langName(c) : label("prog.tag." + c, c))}
+      <code>${esc(c)}</code>
+      ${canWrite() && removable ? `<button data-chiprm="${esc(c)}" title="Togli" aria-label="Togli ${esc(c)}">×</button>` : ""}
+    </span>`;
+
+  /* Il pulsante «Invia un abstract» finora non portava da nessuna parte. Le
+     scelte sensate sono due, e non è detto che una segreteria sappia che un
+     indirizzo email si scrive "mailto:" per farlo funzionare in un pulsante:
+     quel pezzo lo mettiamo noi. */
+  function abstractsField(key, ui, v) {
+    const isMail = /^mailto:/i.test(v);
+    const mode = !v ? "off" : (isMail ? "mail" : "web");
+    const mail = isMail ? v.replace(/^mailto:/i, "") : "";
+    const web  = isMail ? "" : v;
+    return `
+      <div class="setrow setrow--wide" data-key="${esc(key)}">
+        <div class="setrow__lab"><label>${esc(ui.n)}</label>
+          <p class="setrow__h">Decide dove porta il pulsante «Invia un abstract» nella sezione Abstract.</p></div>
+        <div class="setrow__in">
+          <div class="radios">
+            <label><input type="radio" name="absmode" value="off"  ${mode === "off"  ? "checked" : ""} ${ro}>
+              <span><b>Non ancora</b> — il pulsante non viene mostrato</span></label>
+            <label><input type="radio" name="absmode" value="mail" ${mode === "mail" ? "checked" : ""} ${ro}>
+              <span><b>Via email</b> — si apre un messaggio già indirizzato alla segreteria</span></label>
+            <label><input type="radio" name="absmode" value="web"  ${mode === "web"  ? "checked" : ""} ${ro}>
+              <span><b>Su un sito esterno</b> — il modulo di raccolta degli abstract</span></label>
+          </div>
+          <div class="absin ${mode === "mail" ? "" : "hidden"}" data-abs="mail">
+            <input id="absMail" type="email" value="${esc(mail)}" placeholder="abstracts@eeba.eu" ${ro}>
+            <p class="setrow__h">Chi preme il pulsante si ritrova il programma di posta aperto con questo destinatario.</p>
+          </div>
+          <div class="absin ${mode === "web" ? "" : "hidden"}" data-abs="web">
+            <input id="absWeb" type="url" value="${esc(web)}" placeholder="https://…" ${ro}>
+            <p class="setrow__h">L'indirizzo del sistema di raccolta. Si apre in una scheda nuova e deve iniziare con https://</p>
+          </div>
+          <input type="hidden" data-skey="${esc(key)}" value="${esc(v)}">
+        </div>
+      </div>`;
+  }
+
+  /* ------------------------------------------------------------ pagina --- */
   $("#view").innerHTML = `
-    <div class="card" style="max-width:720px">
-      <div class="card__h"><h3>Generali</h3></div>
+    ${SETTING_GROUPS.map(g => `
+      <div class="card" style="max-width:860px;margin-bottom:16px">
+        <div class="card__h"><h3>${esc(g.n)}</h3></div>
+        <div class="card__b" style="padding:0">
+          <p class="setgrp__d">${esc(g.d)}</p>
+          ${g.keys.filter(k => k in cur).map(field).join("")}
+        </div>
+      </div>`).join("")}
+
+    <div class="card" style="max-width:860px">
       <div class="card__b">
-        ${d.results.map(s => `
-          <div class="f">
-            <label for="set_${esc(s.skey)}">${esc(SETTING_LABEL[s.skey] || s.skey)}</label>
-            <input id="set_${esc(s.skey)}" data-skey="${esc(s.skey)}" value="${esc(s.svalue)}" ${canWrite() ? "" : "disabled"}>
-            <p class="hint" style="font-family:var(--mono);font-size:11px">${esc(s.skey)}</p>
-          </div>`).join("")}
-        ${canWrite() ? `<button class="btn btn--primary" id="saveSettings">Salva impostazioni</button>` : ""}
+        <div class="setsave">
+          ${canWrite()
+            ? `<button class="btn btn--primary" id="saveSettings">Salva le impostazioni</button>
+               <span class="setsave__n" id="setDirty"></span>`
+            : `<span class="muted">Il tuo profilo permette di consultare le impostazioni, non di cambiarle.</span>`}
+        </div>
       </div>
     </div>
 
-    <div class="card" style="max-width:720px;margin-top:16px">
+    <details class="setmore">
+      <summary>Impostazioni gestite in altre pagine, e nomi tecnici</summary>
+      <div class="setmore__b">
+        <p>Queste si modificano dove se ne vede l'effetto:</p>
+        <ul>${[...new Set(Object.values(SETTING_ELSEWHERE))].map(p =>
+          `<li><b>${esc(p)}</b> — ${esc(Object.keys(SETTING_ELSEWHERE).filter(k => SETTING_ELSEWHERE[k] === p).join(", "))}</li>`).join("")}</ul>
+        <p>Il nome tecnico di ogni impostazione, utile se devi segnalarci un problema:</p>
+        <table class="settbl"><tbody>
+          ${SETTING_GROUPS.flatMap(g => g.keys).filter(k => k in cur).map(k =>
+            `<tr><td>${esc((SETTING_UI[k] || {}).n || k)}</td><td><code>${esc(k)}</code></td></tr>`).join("")}
+        </tbody></table>
+        ${other.length ? `<p>Chiavi presenti nel database ma non usate da nessuna pagina:
+          ${other.map(s => `<code>${esc(s.skey)}</code>`).join(" ")}</p>` : ""}
+      </div>
+    </details>
+
+    <div class="card" style="max-width:860px;margin-top:16px">
       <div class="card__h"><h3>La tua password</h3></div>
       <div class="card__b">
         <div class="alert alert--err hidden" id="pwErr"></div>
@@ -1676,10 +2019,100 @@ VIEWS.settings = async function () {
       </div>
     </div>`;
 
+  /* ------------------------------------------------------------ logica --- */
+  function mark(key, value) {
+    if (String(cur[key] ?? "") === String(value)) dirty.delete(key);
+    else dirty.set(key, String(value));
+    const n = $("#setDirty");
+    if (n) n.textContent = dirty.size
+      ? (dirty.size === 1 ? "1 modifica non ancora salvata" : `${dirty.size} modifiche non ancora salvate`)
+      : "";
+    $("#saveSettings")?.classList.toggle("is-idle", !dirty.size);
+  }
+
+  $$("[data-skey]").forEach(el => {
+    const key = el.dataset.skey;
+    if (el.dataset.kind === "bool") {
+      el.addEventListener("change", () => {
+        el.closest(".switch").querySelector("[data-boollab]").textContent = el.checked ? "Sì" : "No";
+        mark(key, el.checked ? "1" : "0");
+      });
+    } else if (el.type !== "hidden") {
+      el.addEventListener("input", () => mark(key, el.value));
+    }
+  });
+
+  /* pastiglie: lingue e tipi di sessione */
+  function chipsSync(key) {
+    const box = $(`[data-chips="${key}"]`);
+    const kind = box.dataset.kind;
+    const list = [...box.querySelectorAll("[data-chip]")].map(s => s.dataset.chip);
+    box.innerHTML = list.map(c => chip(c, kind, list.length > 1)).join("");
+    chipsWire(key);
+    const hid = $(`input[type="hidden"][data-skey="${key}"]`);
+    hid.value = list.join(",");
+    mark(key, hid.value);
+  }
+
+  function chipsWire(key) {
+    $(`[data-chips="${key}"]`).querySelectorAll("[data-chiprm]").forEach(b =>
+      b.addEventListener("click", () => { b.closest("[data-chip]").remove(); chipsSync(key); }));
+  }
+
+  ["languages", "session_tags"].forEach(key => {
+    if (!$(`[data-chips="${key}"]`)) return;
+    chipsWire(key);
+    const add = () => {
+      const inp = $(`[data-chipin="${key}"]`);
+      const raw = inp.value.trim().toLowerCase();
+      const box = $(`[data-chips="${key}"]`);
+      const ok = key === "languages" ? /^[a-z]{2}$/.test(raw) : /^[a-z0-9_]+$/.test(raw);
+      if (!ok) {
+        inp.classList.add("err");
+        toast(key === "languages"
+          ? "Il codice di una lingua è di due lettere: it, en, de…"
+          : "Solo lettere minuscole, numeri e trattini bassi, senza spazi");
+        return;
+      }
+      if (box.querySelector(`[data-chip="${raw}"]`)) { inp.value = ""; toast("C'è già"); return; }
+      box.insertAdjacentHTML("beforeend", chip(raw, box.dataset.kind, true));
+      inp.value = ""; inp.classList.remove("err");
+      chipsSync(key);
+      $(`[data-chipin="${key}"]`).focus();
+    };
+    $(`[data-chipbtn="${key}"]`)?.addEventListener("click", add);
+    $(`[data-chipin="${key}"]`)?.addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); add(); }
+    });
+    $(`[data-chipin="${key}"]`)?.addEventListener("input", e => e.target.classList.remove("err"));
+  });
+
+  /* abstract: le tre possibilità scrivono tutte nello stesso campo nascosto */
+  function absSync() {
+    const mode = $('input[name="absmode"]:checked')?.value || "off";
+    $$("[data-abs]").forEach(b => b.classList.toggle("hidden", b.dataset.abs !== mode));
+    const mail = $("#absMail")?.value.trim() || "";
+    const web  = $("#absWeb")?.value.trim() || "";
+    const v = mode === "mail" ? (mail ? "mailto:" + mail : "")
+            : mode === "web"  ? web : "";
+    const hid = $('input[type="hidden"][data-skey="abstracts_url"]');
+    if (!hid) return;
+    hid.value = v;
+    mark("abstracts_url", v);
+  }
+  $$('input[name="absmode"]').forEach(r => r.addEventListener("change", absSync));
+  $("#absMail")?.addEventListener("input", absSync);
+  $("#absWeb")?.addEventListener("input", absSync);
+
+  /* ---------------------------------------------------------- salvataggio */
   $("#saveSettings")?.addEventListener("click", async () => {
-    const payload = Object.fromEntries($$("[data-skey]").map(i => [i.dataset.skey, i.value]));
-    try { await apiJson("/admin/settings", "PATCH", payload); toast("Impostazioni salvate"); }
-    catch (e) { showError(e); }
+    if (!dirty.size) { toast("Non c'è niente di cambiato da salvare"); return; }
+    try {
+      await apiJson("/admin/settings", "PATCH", Object.fromEntries(dirty));
+      dirty.forEach((v, k) => { cur[k] = v; });
+      dirty.clear(); mark("", "");
+      toast("Impostazioni salvate");
+    } catch (e) { showError(e); }
   });
 
   $("#savePw").addEventListener("click", async () => {
@@ -1690,6 +2123,8 @@ VIEWS.settings = async function () {
       toast("Password aggiornata");
     } catch (e) { gateError(box, e); }
   });
+
+  mark("", "");
 };
 
 /* ============================================================ UTENTI */

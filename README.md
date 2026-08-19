@@ -32,9 +32,9 @@ schema/
   generate-seed.js     rigenera seed.sql da public/i18n.js
   migrations/          modifiche allo schema, da applicare in ordine
 tests/
-  api.test.mjs         185 test d'integrazione sull'API reale
+  api.test.mjs         204 test d'integrazione sull'API reale
   theme.test.mjs       117 controlli di contrasto sulle palette
-  frontend.test.mjs    32 controlli statici, messaggi di errore inclusi
+  frontend.test.mjs    39 controlli statici, messaggi di errore inclusi
 wrangler.toml
 ```
 
@@ -140,7 +140,7 @@ l'endpoint di setup si chiude da solo.
 npm run db:schema:local
 npm run db:seed:local
 npm run dev          # → http://localhost:8787
-npm test             # 334 test, nessuna dipendenza esterna
+npm test             # 360 test, nessuna dipendenza esterna
 ```
 
 I test non toccano Cloudflare: eseguono il router vero (`src/api.js`) contro un
@@ -157,6 +157,14 @@ ripartizione per stato, tariffa e paese; riempimento degli extra a capienza limi
 
 **Iscrizioni** — ricerca su nome/email/ente/riferimento, filtri per stato e tariffa, paginazione,
 scheda di dettaglio con cambio stato pagamento e note interne, export CSV (separatore `;`, BOM per Excel).
+
+**Sezioni della home** — l'ordine dei nove blocchi della home e quali mostrare.
+Si sposta con le frecce, si spegne con l'interruttore, si salva da solo. Una sezione
+nascosta sparisce anche dal menu in alto e dal piè di pagina.
+
+L'elenco è chiuso: ogni riga corrisponde a un blocco che esiste nel markup, quindi si
+riordina e si nasconde ma non si inventa. Aggiungere un *tipo* di sezione che oggi non
+c'è (una galleria, un video) resta lavoro sul codice.
 
 **Programma / Relatori / Sponsor / Traduzioni** — CRUD completo con editor a schede per le 4 lingue.
 Le schede segnano con un pallino rosso le lingue ancora vuote. Ogni salvataggio è online entro un minuto
@@ -177,9 +185,23 @@ del design system, perché è da lì che dipende la leggibilità. Un accento per
 viene spostato quel tanto che basta a mantenere il contrasto minimo — un giallo acceso
 su fondo bianco viene scurito, e il backoffice te lo dice.
 
-**Impostazioni** — date evento, numero di giornate, scadenza early bird, lingue attive,
-tipi di sessione, apertura iscrizioni, sede. I valori sono validati lato server: le
-giornate accettano solo 1–14, i colori solo esadecimali, le lingue solo codici a due lettere.
+**Impostazioni** — raggruppate per argomento (quando e dove / iscrizioni / lingue e
+contenuti), ognuna con un nome in italiano e una riga che spiega dove finisce sul sito.
+I campi sono del tipo giusto: calendario per le date, interruttore per il sì/no, elenco
+per la valuta, pastiglie per lingue e tipi di sessione. I nomi tecnici delle chiavi
+restano in fondo, in una sezione richiudibile, perché servono per le segnalazioni.
+
+Le impostazioni che hanno già una pagina propria — colori, logo, pagamenti — non
+compaiono qui: si modificano dove se ne vede l'effetto.
+
+I valori sono comunque validati lato server: le giornate accettano solo 1–14, i colori
+solo esadecimali, le lingue solo codici a due lettere, e la destinazione degli abstract
+solo `https://` o `mailto:`.
+
+**Dove si inviano gli abstract** — il pulsante «Invia un abstract» punta dove dice
+`abstracts_url`: un sistema esterno di raccolta, l'indirizzo della segreteria, oppure
+niente — e in quel caso il pulsante non si mostra affatto, invece di non portare da
+nessuna parte.
 
 **Utenti** — tre ruoli:
 

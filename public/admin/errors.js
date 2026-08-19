@@ -121,6 +121,10 @@ const ERRORS = {
     t: "Questo valore non va bene",
     w: "Controlla il formato: le date si scrivono anno-mese-giorno, i colori iniziano con il cancelletto, le lingue sono sigle di due lettere separate da virgola."
   },
+  LIST_FIXED: {
+    t: "Questo elenco non si può allungare né accorciare",
+    w: "Le sezioni della home sono quelle che esistono nel sito: da qui si riordinano e si nascondono, ma aggiungerne una nuova richiede una modifica al sito. Scrivici se ti serve."
+  },
   ENDPOINT_UNKNOWN: {
     t: "Questa funzione non esiste",
     w: "Probabilmente il backoffice è rimasto aperto durante un aggiornamento. Ricarica la pagina."

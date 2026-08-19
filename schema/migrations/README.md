@@ -26,6 +26,7 @@ verificando che i dati finiscano dove devono e che rilanciarle non rompa niente.
 | `001-flexible-days-theme.sql` | Toglie il limite di 3 giornate, aggiunge palette, logo e impostazioni derivate |
 | `002-payments.sql` | Metodi di pagamento, riferimenti al processore, registro degli eventi |
 | `003-meals.sql` | Sostituisce il campo libero sulle esigenze alimentari con scelta del menu e allergie con consenso esplicito |
+| `004-sections.sql` | Ordine e visibilità delle sezioni della home, e destinazione del pulsante «Invia un abstract» |
 
 ## Quando ne aggiungi una
 

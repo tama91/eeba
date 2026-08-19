@@ -26,6 +26,18 @@ INSERT OR IGNORE INTO settings (skey, svalue) VALUES ('payments_methods', 'card,
 INSERT OR IGNORE INTO settings (skey, svalue) VALUES ('payments_currency', 'EUR');
 INSERT OR IGNORE INTO settings (skey, svalue) VALUES ('invoice_note', '');
 INSERT OR IGNORE INTO settings (skey, svalue) VALUES ('meals_enabled', '1');
+INSERT OR IGNORE INTO settings (skey, svalue) VALUES ('abstracts_url', '');
+
+-- Sezioni della home introdotte con la migrazione 004
+INSERT OR IGNORE INTO sections (code, sort, published) VALUES ('about', 0, 1);
+INSERT OR IGNORE INTO sections (code, sort, published) VALUES ('focus', 1, 1);
+INSERT OR IGNORE INTO sections (code, sort, published) VALUES ('programme', 2, 1);
+INSERT OR IGNORE INTO sections (code, sort, published) VALUES ('speakers', 3, 1);
+INSERT OR IGNORE INTO sections (code, sort, published) VALUES ('venue', 4, 1);
+INSERT OR IGNORE INTO sections (code, sort, published) VALUES ('register', 5, 1);
+INSERT OR IGNORE INTO sections (code, sort, published) VALUES ('abstracts', 6, 1);
+INSERT OR IGNORE INTO sections (code, sort, published) VALUES ('sponsors', 7, 1);
+INSERT OR IGNORE INTO sections (code, sort, published) VALUES ('faq', 8, 1);
 
 -- Opzioni di menu introdotte con la migrazione 003
 INSERT OR IGNORE INTO meals (code, name_json, sort, active) VALUES ('standard', '{"en":"Standard menu","it":"Menu standard","nl":"Standaardmenu","fr":"Menu standard"}', 0, 1);

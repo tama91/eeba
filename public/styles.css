@@ -608,3 +608,6 @@ html[data-theme="dark"] .theme .sun{ display:none; }
 
 /* Blocco del consenso per le allergie: compare solo quando serve */
 .hidden{ display:none !important; }
+/* Le sezioni spente e il pulsante abstract non configurato usano [hidden]:
+   senza questa riga i display espliciti di .section e .btn lo vincerebbero. */
+[hidden]{ display:none !important; }

@@ -121,6 +121,17 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Ordine e visibilità dei blocchi della home. Una riga per ogni <section> che
+-- esiste in index.html: si riordina e si spegne dal backoffice, ma non si
+-- inventa — un codice senza markup corrispondente non disegnerebbe nulla.
+CREATE TABLE IF NOT EXISTS sections (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  code       TEXT    NOT NULL UNIQUE,
+  sort       INTEGER NOT NULL DEFAULT 0,
+  published  INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 -- ------------------------------------------------------------- ISCRIZIONI
 CREATE TABLE IF NOT EXISTS registrations (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
